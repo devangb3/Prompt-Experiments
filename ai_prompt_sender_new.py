@@ -2,8 +2,6 @@
 """
 AI Prompt Sender - Send prompts to multiple AI providers
 Supports: OpenAI, Anthropic (Claude), Google Gemini, and Perplexity
-
-Refactored version using separate service files and proper folder structure
 """
 
 import asyncio
@@ -38,16 +36,16 @@ async def main():
     """Example usage of the refactored AI Prompt Sender"""
     sender = AIPromptSender()
     
-    response = await sender.send_to_all(
+    responses = await sender.send_to_all(
         [   
             PromptMessage(role="system", content="You always answer in two words."),
             PromptMessage(role="user", content="What is the capital of France?")
         ]
     )
-    print_response(response)
+    print_responses(responses)
 
 if __name__ == "__main__":
-    print("AI Prompt Sender (Refactored)")
+    print("AI Prompt Sender")
     print("=============================")
     print("\n" + "="*50)
     
