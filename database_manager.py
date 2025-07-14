@@ -141,20 +141,19 @@ class DatabaseManager:
         
         # Convert to dict for JSON serialization
         conv_dict = conversation.model_dump(by_alias=True)
-        conv_dict['_id'] = str(conv_dict['_id'])  # Convert ObjectId to string
-        
+        conv_dict['_id'] = str(conv_dict['_id'])
         with open(filename, 'w') as f:
             json.dump(conv_dict, f, indent=2, default=str)
         
-        print(f"✅ Exported conversation to {filename}")
+        print(f"Exported conversation to {filename}")
     
     async def delete_conversation(self, conversation_id: str):
         """Delete a conversation"""
         success = await self.db_service.delete_conversation(conversation_id)
         if success:
-            print(f"✅ Deleted conversation: {conversation_id}")
+            print(f"Deleted conversation: {conversation_id}")
         else:
-            print(f"❌ Failed to delete conversation: {conversation_id}")
+            print(f"Failed to delete conversation: {conversation_id}")
     
     async def close(self):
         """Close database connections"""

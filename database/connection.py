@@ -16,15 +16,12 @@ async def get_database():
     global _client, _database
     
     if _database is None:
-        # Get MongoDB connection string from environment
         mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
         database_name = os.getenv('MONGO_DATABASE', 'ai_prompt_sender')
         
-        # Create async client
         _client = AsyncIOMotorClient(mongo_uri)
         _database = _client[database_name]
         
-        # Test connection
         try:
             await _client.admin.command('ping')
             print(f"Connected to MongoDB: {database_name}")

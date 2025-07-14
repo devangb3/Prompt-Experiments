@@ -57,11 +57,9 @@ class DatabaseService:
         """Save a complete conversation to the database"""
         await self.initialize()
         
-        # Generate conversation ID if not provided
         if not conversation_id:
             conversation_id = f"conv_{uuid.uuid4().hex[:8]}"
         
-        # Extract system prompt if present
         system_prompt = None
         user_messages = []
         
@@ -71,7 +69,6 @@ class DatabaseService:
             else:
                 user_messages.append(msg)
         
-        # Create conversation object
         conversation = Conversation(
             conversation_id=conversation_id,
             system_prompt=system_prompt,
@@ -114,7 +111,6 @@ class DatabaseService:
         """Search conversations by content"""
         await self.initialize()
         
-        # Create text search query
         search_query = {
             "$or": [
                 {"messages.content": {"$regex": query, "$options": "i"}},
@@ -130,7 +126,6 @@ class DatabaseService:
         return conversations
 
 
-# Singleton pattern for database service
 _db_service = None
 
 def get_db_service() -> DatabaseService:

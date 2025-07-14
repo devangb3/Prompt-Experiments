@@ -50,10 +50,8 @@ class AIPromptSender:
         responses = await self.factory.send_to_all(messages, models)
         total_time = time.time() - start_time
         
-        # Save to database if enabled
         if self.enable_database and self.db_service and len(responses) > 1:
             try:
-                # Calculate average response time per provider
                 avg_time_per_provider = total_time / len(responses)
                 response_times = {resp.provider: avg_time_per_provider for resp in responses}
                 
@@ -116,7 +114,6 @@ async def main():
     responses = await sender.send_to_all(messages)
     print_responses(responses)
     
-    # Get database statistics
     print("\nDatabase Statistics:")
     stats = await sender.get_statistics()
     print(f"Total conversations: {stats['total_conversations']}")
@@ -125,13 +122,11 @@ async def main():
     for provider, count in stats['provider_stats'].items():
         print(f"  {provider}: {count}")
     
-    # Get recent conversations
     print("\nRecent Conversations:")
     conversations = await sender.get_conversation_history(limit=3)
     for conv in conversations:
         print(f"  {conv.conversation_id}: {len(conv.messages)} messages, {len(conv.responses)} responses")
     
-    # Close connections
     await sender.close()
 
 
