@@ -71,7 +71,6 @@ class AIServiceFactory:
                 error=f"Service not available for provider: {provider.value}"
             )
         
-        # Use default models if none specified
         default_models = {
             Provider.OPENAI: "gpt-4o-mini",
             Provider.ANTHROPIC: "claude-3-5-sonnet-20241022",

@@ -30,26 +30,22 @@ class GeminiService(BaseAIService):
         
         try:
             contents = []
+            system_prompt = ""
             for msg in messages:
                 if msg.role == "system":
-                    contents.append(types.Content(
-                        role="user",
-                        parts=[types.Part(text=f"Instructions: {msg.content}")]
-                    ))
+                    system_prompt = msg.content
                 elif msg.role == "user":
                     contents.append(types.Content(
                         role="user",
                         parts=[types.Part(text=msg.content)]
                     ))
-                elif msg.role == "assistant":
-                    contents.append(types.Content(
-                        role="model",
-                        parts=[types.Part(text=msg.content)]
-                    ))
             
             response = self.client.models.generate_content(
                 model=f"models/{model}",
-                contents=contents
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt
+                )
             )
             
             return AIResponse(

@@ -38,26 +38,17 @@ async def main():
     """Example usage of the refactored AI Prompt Sender"""
     sender = AIPromptSender()
     
-    response = await sender.send_to_provider(
-        Provider.GEMINI,
-        [PromptMessage(role="user", content="Explain quantum computing in simple terms.")]
+    response = await sender.send_to_all(
+        [   
+            PromptMessage(role="system", content="You always answer in two words."),
+            PromptMessage(role="user", content="What is the capital of France?")
+        ]
     )
     print_response(response)
-    
-    print("\n" + "="*50)
-    print("Sending to all available providers...")
-    print("="*50)
-    
-    responses = await sender.send_to_all([
-        PromptMessage(role="user", content="What is the capital of France?")
-    ])
-    print_responses(responses)
-
 
 if __name__ == "__main__":
     print("AI Prompt Sender (Refactored)")
     print("=============================")
     print("\n" + "="*50)
     
-    # Run the examples
     asyncio.run(main()) 
