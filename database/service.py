@@ -79,7 +79,7 @@ class DatabaseService:
         
         # Save to database
         saved_conversation = await self.repository.create(conversation)
-        print(f"💾 Saved conversation {conversation_id} to database")
+        print(f"Saved conversation {conversation_id} to database")
         return saved_conversation
     
     async def get_conversation(self, conversation_id: str) -> Optional[Conversation]:

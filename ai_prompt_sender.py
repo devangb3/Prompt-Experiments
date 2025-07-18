@@ -107,10 +107,10 @@ async def main():
     
     messages = [
         PromptMessage(role="system", content="You always answer in two words."),
-        PromptMessage(role="user", content="What is the capital of France?")
+        PromptMessage(role="user", content="What is the capital of Germany?")
     ]
     
-    print("\n📤 Sending prompt to all providers...")
+    print("\nSending prompt to all providers...")
     responses = await sender.send_to_all(messages)
     print_responses(responses)
     
