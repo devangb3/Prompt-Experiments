@@ -106,8 +106,8 @@ async def main():
     print("=" * 50)
     
     messages = [
-        PromptMessage(role="system", content="You always answer in two words."),
-        PromptMessage(role="user", content="What is the capital of Germany?")
+        PromptMessage(role="system", content="Fill this out with random placeholder data"),
+        PromptMessage(role="user", content="Fill BrainScanResult out with random placeholder data")
     ]
     
     print("\nSending prompt to all providers...")

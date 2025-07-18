@@ -4,7 +4,7 @@ Perplexity service implementation
 
 from typing import List
 from openai import OpenAI
-
+from models.BrainScanResult import BrainScanResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
 
@@ -36,12 +36,16 @@ class PerplexityService(BaseAIService):
             response = self.client.chat.completions.create(
                 model=model,
                 messages=perplexity_messages,
-                max_tokens=4000
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"schema": BrainScanResult.model_json_schema()},
+                },
             )
-            
+            print("Response: ", response.choices[0].message.content)
+            brain_scan_result = BrainScanResult.model_validate_json(response.choices[0].message.content)
             return AIResponse(
                 provider="Perplexity",
-                content=response.choices[0].message.content,
+                content=brain_scan_result,
                 model=model,
                 tokens_used=response.usage.total_tokens if response.usage else None
             )

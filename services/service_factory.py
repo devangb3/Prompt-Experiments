@@ -73,8 +73,8 @@ class AIServiceFactory:
             )
         
         default_models = {
-            Provider.OPENAI: "gpt-4o-mini",
-            Provider.ANTHROPIC: "claude-3-5-sonnet-20241022",
+            Provider.OPENAI: "o4-mini",
+            Provider.ANTHROPIC: "claude-sonnet-4-20250514",
             Provider.GEMINI: "gemini-2.5-flash",
             Provider.PERPLEXITY: "sonar"
         }

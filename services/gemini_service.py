@@ -5,7 +5,7 @@ Google Gemini service implementation
 from typing import List
 from google import genai
 from google.genai import types
-
+from models.BrainScanResult import BrainScanResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
 
@@ -44,7 +44,9 @@ class GeminiService(BaseAIService):
                 model=f"models/{model}",
                 contents=contents,
                 config=types.GenerateContentConfig(
-                    system_instruction=system_prompt
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json",
+                    response_schema=BrainScanResult
                 )
             )
             

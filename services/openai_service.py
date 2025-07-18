@@ -4,7 +4,7 @@ OpenAI service implementation
 
 from typing import List
 from openai import OpenAI
-
+from models.BrainScanResult import BrainScanResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
 
@@ -30,9 +30,10 @@ class OpenAIService(BaseAIService):
         try:
             openai_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
             
-            response = self.client.chat.completions.create(
+            response = self.client.chat.completions.parse(
                 model=model,
                 messages=openai_messages,
+                response_format=BrainScanResult
             )
             
             return AIResponse(
