@@ -1,6 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union
-from typing_extensions import Literal
+from typing import List
 from .score_models import ScoreNumbers, Theme, Feedback
 
 class SubConstruct(BaseModel):

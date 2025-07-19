@@ -1,6 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union
-from typing_extensions import Literal
+from typing import List, Optional
 
 class ColorTheme(BaseModel):
     text: str  
