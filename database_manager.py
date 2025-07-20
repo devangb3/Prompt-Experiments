@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 
 from database.service import get_db_service
 from database.connection import close_database
-from services import Provider
 
 load_dotenv()
 
@@ -25,7 +24,7 @@ class DatabaseManager:
     
     async def show_statistics(self):
         """Display database statistics"""
-        print("📊 Database Statistics")
+        print("Database Statistics")
         print("=" * 40)
         
         stats = await self.db_service.get_statistics()
@@ -164,7 +163,7 @@ async def interactive_mode():
     """Interactive database management mode"""
     manager = DatabaseManager()
     
-    print("🗄️ AI Prompt Sender Database Manager")
+    print("AI Prompt Sender Database Manager")
     print("=" * 50)
     
     while True:

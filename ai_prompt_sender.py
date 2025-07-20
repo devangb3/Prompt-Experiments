@@ -9,6 +9,7 @@ import asyncio
 import time
 from dotenv import load_dotenv
 
+from prompt_creator import PromptCreator
 from services import AIServiceFactory, Provider, PromptMessage, print_response, print_responses
 from database.service import get_db_service
 from database.connection import close_database
@@ -105,8 +106,34 @@ async def main():
     print("AI Prompt Sender with MongoDB Integration")
     print("=" * 50)
     
+    prompt_template = """
+                    {LLM_FRAMING_1}
+
+                    {LLM_ANALYTICAL_TASK_1}:
+                    {BRAIN_DATA_SAMPLE}
+
+                    Based on the data and the following context, please perform the requested analysis.
+
+                    User Context:
+                    {USER_CONTEXT_1}
+
+                    Exercise Context:
+                    {EXERCISE_CONTEXT_1}
+
+                    Analysis Task:
+                    {LLM_ANALYTICAL_TASK_2}
+
+                    Required output structure:
+                    {OUTPUT_STRUCTURE_2}
+                """
+    
+    prompt_creator = PromptCreator(
+        prompt_template=prompt_template
+    )
+    system_prompt = prompt_creator.create_prompt()
+    #user_prompt = get_user_prompt()
     messages = [
-        PromptMessage(role="system", content="Fill this out with random placeholder data"),
+        PromptMessage(role="system", content=system_prompt),
         PromptMessage(role="user", content="Fill BrainScanResult out with random placeholder data")
     ]
     
