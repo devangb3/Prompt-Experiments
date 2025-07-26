@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 
-class Accomplishment(BaseModel):
+class HistoryTile(BaseModel):
     title: str
-    detail: str
+    hasImplemented: bool
 
     model_config = {
         "arbitrary_types_allowed": True

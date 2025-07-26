@@ -4,7 +4,7 @@ Perplexity service implementation
 
 from typing import List
 from openai import OpenAI
-from models.BrainScanResult import BrainScanResult
+from models.BrainWorkoutResult import BrainScanResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
 

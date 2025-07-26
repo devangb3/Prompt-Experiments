@@ -36,7 +36,7 @@ class DatabaseManager:
     
     async def list_conversations(self, limit: int = 10, provider: Optional[str] = None):
         """List recent conversations"""
-        print(f"📚 Recent Conversations (limit: {limit})")
+        print(f"Recent Conversations (limit: {limit})")
         print("=" * 50)
         
         if provider:

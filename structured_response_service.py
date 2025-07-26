@@ -1,4 +1,4 @@
-from models.BrainScanResult import BrainScanResult
+from models.BrainWorkoutResult import BrainScanResult
 from google import genai
 import json
 

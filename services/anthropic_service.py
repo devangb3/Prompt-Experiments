@@ -5,7 +5,7 @@ Anthropic service implementation
 from typing import List
 import anthropic
 import json
-from models.BrainScanResult import BrainScanResult
+from models.BrainWorkoutResult import BrainScanResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
 
