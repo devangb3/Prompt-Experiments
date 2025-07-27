@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List
-from .HistoryTile import HistoryTile
+from .tiles.HistoryTile import HistoryTile
 
 class MomentumMeasure(BaseModel):
     last_workout : List[HistoryTile]

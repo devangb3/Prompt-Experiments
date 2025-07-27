@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List
-from .FeedbackTile import FeedbackTile
+from .tiles.FeedbackTile import FeedbackTile
 
 class Skill(BaseModel):
     skill_name: str

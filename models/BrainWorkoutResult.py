@@ -3,7 +3,7 @@ from typing import List
 from .Skill import Skill
 from .MomentumMeasure import MomentumMeasure
 from .ReasoningRefinement import ReasoningRefinement
-from .MilestoneTile import MilestoneTile
+from .tiles.MilestoneTile import MilestoneTile
 from .WorkoutRound import WorkoutRound
 
 class BrainWorkoutResult(BaseModel):
