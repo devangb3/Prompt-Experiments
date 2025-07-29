@@ -38,14 +38,14 @@ class PerplexityService(BaseAIService):
                 messages=perplexity_messages,
                 response_format={
                     "type": "json_schema",
-                    "json_schema": {"schema": BrainScanResult.model_json_schema()},
+                    "json_schema": {"schema": BrainWorkoutResult.model_json_schema()},
                 },
             )
             print("Response: ", response.choices[0].message.content)
-            brain_scan_result = BrainScanResult.model_validate_json(response.choices[0].message.content)
+            brain_workout_result = BrainWorkoutResult.model_validate_json(response.choices[0].message.content)
             return AIResponse(
                 provider="Perplexity",
-                content=brain_scan_result,
+                content=brain_workout_result.model_dump_json(),
                 model=model,
                 tokens_used=response.usage.total_tokens if response.usage else None
             )

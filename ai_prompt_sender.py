@@ -8,7 +8,8 @@ With MongoDB integration for conversation storage
 import asyncio
 import time
 from dotenv import load_dotenv
-
+import json
+import aiofiles
 from prompt_creator import PromptCreator
 from services import AIServiceFactory, Provider, PromptMessage, print_response, print_responses
 from database.service import get_db_service
@@ -32,7 +33,6 @@ class AIPromptSender:
         response = await self.factory.send_to_provider(provider, messages, model)
         response_time = time.time() - start_time
         
-        # Save to database if enabled
         if self.enable_database and self.db_service:
             try:
                 await self.db_service.save_conversation(
@@ -132,14 +132,17 @@ async def main():
     )
     system_prompt = prompt_creator.create_prompt()
     #user_prompt = get_user_prompt()
-    messages = [
-        PromptMessage(role="system", content=system_prompt),
-        PromptMessage(role="user", content="Fill BrainScanResult out with random placeholder data")
-    ]
     
+    async with aiofiles.open("scanCollection.json", mode="r") as f:
+        dummy_ui_request = json.loads(await f.read())
+
+    messages = [
+        PromptMessage(role="system", content="Fill out BrainWorkoutResult with any placeholder values. I just want to test the response format. make sure to fill out all fields as specifiied in the schema descriptions."),
+        PromptMessage(role="user", content=json.dumps(dummy_ui_request))
+    ]
     print("\nSending prompt to all providers...")
-    responses = await sender.send_to_all(messages)
-    print_responses(responses)
+    responses = await sender.send_to_provider(Provider.GEMINI, messages)
+    print_response(responses)
     
     print("\nDatabase Statistics:")
     stats = await sender.get_statistics()

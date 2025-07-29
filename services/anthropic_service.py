@@ -5,7 +5,7 @@ Anthropic service implementation
 from typing import List
 import anthropic
 import json
-from models.BrainWorkoutResult import BrainScanResult
+from models.BrainWorkoutResult import BrainWorkoutResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
 
@@ -35,9 +35,9 @@ class AnthropicService(BaseAIService):
             system_prompt = "\n\n".join(system_messages) if system_messages else "You are a helpful assistant."
             
             schema_example = '''
-            You MUST respond with ONLY a valid JSON object that follows the BrainScanResult schema exactly. Do not include any other text, explanations, or formatting - just the raw JSON:
+            You MUST respond with ONLY a valid JSON object that follows the BrainWorkoutResult schema exactly. Do not include any other text, explanations, or formatting - just the raw JSON:
 
-            BrainScanResult:
+            BrainWorkoutResult:
                 - scan_id: integer
                 - accomplishments: List[Accomplishment]
                 - categories: List[Category] 
@@ -98,7 +98,7 @@ class AnthropicService(BaseAIService):
                 messages=[
                     {
                         "role": "user",
-                        "content": f"Please analyze this data and provide advice in the exact BrainScanResult JSON format:\n\n{user_msg.content if user_msg else ''}"
+                        "content": f"Please analyze this data and provide advice in the exact BrainWorkoutResult JSON format:\n\n{user_msg.content if user_msg else ''}"
                     }
                 ]
             )
@@ -126,8 +126,8 @@ class AnthropicService(BaseAIService):
             
             try:
                 response_data = json.loads(response_text)
-                brain_scan_result = BrainScanResult(**response_data)
-                validated_content = brain_scan_result.model_dump_json()
+                brain_workout_result = BrainWorkoutResult(**response_data)
+                validated_content = brain_workout_result.model_dump_json()
             except json.JSONDecodeError as json_error:
                 return AIResponse(
                     provider="Anthropic",

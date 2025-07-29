@@ -33,12 +33,15 @@ class OpenAIService(BaseAIService):
             response = self.client.chat.completions.parse(
                 model=model,
                 messages=openai_messages,
-                response_format=BrainScanResult
+                response_format=BrainWorkoutResult
             )
+            
+            # Parse the response to validate it's a valid BrainWorkoutResult
+            brain_workout_result = BrainWorkoutResult.model_validate_json(response.choices[0].message.content)
             
             return AIResponse(
                 provider="OpenAI",
-                content=response.choices[0].message.content,
+                content=brain_workout_result.model_dump_json(),
                 model=model,
                 tokens_used=response.usage.total_tokens if response.usage else None
             )
