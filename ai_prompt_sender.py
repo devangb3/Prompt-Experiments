@@ -133,7 +133,7 @@ async def main():
     system_prompt = prompt_creator.create_prompt()
     #user_prompt = get_user_prompt()
     
-    async with aiofiles.open("filledScanCollection.json", mode="r") as f:
+    async with aiofiles.open("test_data/filledScanCollection.json", mode="r") as f:
         dummy_ui_request = json.loads(await f.read())
 
     messages = [
