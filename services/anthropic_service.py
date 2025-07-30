@@ -5,7 +5,7 @@ Anthropic service implementation
 from typing import List
 import anthropic
 import json
-from models.BrainWorkoutResult import BrainScanResult
+from models.BrainWorkoutResult import BrainWorkoutResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
 
@@ -33,121 +33,56 @@ class AnthropicService(BaseAIService):
             user_messages = [msg for msg in messages if msg.role != "system"]
             user_msg = user_messages[0] if user_messages else None
             system_prompt = "\n\n".join(system_messages) if system_messages else "You are a helpful assistant."
-            
-            schema_example = '''
-            You MUST respond with ONLY a valid JSON object that follows the BrainScanResult schema exactly. Do not include any other text, explanations, or formatting - just the raw JSON:
 
-            BrainScanResult:
-                - scan_id: integer
-                - accomplishments: List[Accomplishment]
-                - categories: List[Category] 
-                - reasoning_refinement: List[ReasoningRefinement]
-
-            Where:
-            Accomplishment: {title: str, detail: str}
-            Category: {title: str, strength_spotlight: List[StrengthSpotlight], wisdom_whispers: List[WisdomWhispers]}
-            StrengthSpotlight: {title: str, detail: str, importance: str, what_to_do_next_time: str, questions_to_ask_next_time: str}
-            WisdomWhispers: {title: str, detail: str, importance: str, what_to_do_next_time: str, questions_to_ask_next_time: str}
-            ReasoningRefinement: {blind_spots: List[str], unclear_assumptions: List[str], logic_issues: List[str], creativity_issues: List[str]}
-
-            Example response:
-            {
-            "scan_id": 1,
-            "accomplishments": [
-                {"title": "Project Completion", "detail": "Successfully delivered the Q3 financial report ahead of schedule."},
-                {"title": "Team Leadership", "detail": "Guided a cross-functional team to achieve a key milestone."}
-            ],
-            "categories": [
-                {
-                "title": "Strategic Planning",
-                "strength_spotlight": [
-                    {
-                    "title": "Clear Vision",
-                    "detail": "Demonstrated a strong ability to articulate long-term goals.",
-                    "importance": "High: A clear vision provides direction and motivates the team.",
-                    "what_to_do_next_time": "Ensure vision is communicated to all stakeholders.",
-                    "questions_to_ask_next_time": "How can we better integrate this vision into daily tasks?"
-                    }
-                ],
-                "wisdom_whispers": [
-                    {
-                    "title": "Over-Reliance on Past Data",
-                    "detail": "Tendency to give undue weight to historical data, potentially overlooking new market trends.",
-                    "importance": "Medium: Could lead to missed opportunities if not balanced with forward-looking analysis.",
-                    "what_to_do_next_time": "Incorporate more predictive analytics and scenario planning.",
-                    "questions_to_ask_next_time": "What external factors might invalidate our past assumptions?"
-                    }
-                ]
-                }
-            ],
-            "reasoning_refinement": [
-                {
-                "blind_spots": ["Lack of consideration for international market regulations.", "Potential impact of emerging technologies not fully assessed."],
-                "unclear_assumptions": ["Assuming user adoption rates will be linear.", "Underestimating competitor's response time."],
-                "logic_issues": ["Correlation mistaken for causation in sales figures.", "Inconsistent application of risk assessment criteria."],
-                "creativity_issues": ["Relying too heavily on conventional solutions.", "Limited exploration of disruptive business models."]
-                }
-            ]
+            save_workout_tool = {
+                "name": "save_brain_workout_result",
+                "description": "Saves the complete analysis of a brain workout session. Make sure to fill out EVERY field in the JSON schema. Success is indicated by the LLM returning the filled out JSON object.",
+                "input_schema": BrainWorkoutResult.model_json_schema()
             }
-            '''
-            
+           
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=4000,
-                system=system_prompt + "\n\n" + schema_example,
+                system=system_prompt,
+                tools=[save_workout_tool],
+                tool_choice={"type": "tool", "name": "save_brain_workout_result"},
                 messages=[
                     {
                         "role": "user",
-                        "content": f"Please analyze this data and provide advice in the exact BrainScanResult JSON format:\n\n{user_msg.content if user_msg else ''}"
+                        "content": (
+                            "STRICT INSTRUCTIONS: You must ONLY return a valid BrainWorkoutResult JSON object. "
+                            "Do NOT include any extra text, comments, or explanations. "
+                            "Every field must be present and filled according to its description. "
+                            "If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null. "
+                            "Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure. "
+                            "Double-check your output for completeness and validity before submitting.\n\n"
+                            f"{user_msg.content if user_msg else ''}"
+                        )
                     }
                 ]
             )
             
-            response_text = response.content[0].text
-            
-            if not response_text or not response_text.strip():
+            tool_call = response.content[0]
+            tool_args = tool_call.input
+
+            if tool_call.name == "save_brain_workout_result":
+                print("LLM responded with the correct tool. Validating data...")
+                workout_result = BrainWorkoutResult.model_validate(tool_args)
+                print("Data validation successful!")
+
+            else:
+                print(f"Error: LLM responded with an unexpected tool: {tool_call.name}")
                 return AIResponse(
                     provider="Anthropic",
                     content="",
                     model=model,
-                    error="Empty response from Anthropic API"
+                    error=f"LLM responded with an unexpected tool: {tool_call.name}"
                 )
-            
-            if "```json" in response_text:
-                start = response_text.find("```json") + 7
-                end = response_text.find("```", start)
-                if end != -1:
-                    response_text = response_text[start:end].strip()
-            elif "```" in response_text:
-                start = response_text.find("```") + 3
-                end = response_text.find("```", start)
-                if end != -1:
-                    response_text = response_text[start:end].strip()
-            
-            try:
-                response_data = json.loads(response_text)
-                brain_scan_result = BrainScanResult(**response_data)
-                validated_content = brain_scan_result.model_dump_json()
-            except json.JSONDecodeError as json_error:
-                return AIResponse(
-                    provider="Anthropic",
-                    content="",
-                    model=model,
-                    error=f"JSON parsing failed: {str(json_error)}. Raw response: {response_text[:200]}..."
-                )
-            except Exception as validation_error:
-                return AIResponse(
-                    provider="Anthropic",
-                    content="",
-                    model=model,
-                    error=f"Model validation failed: {str(validation_error)}. Raw response: {response_text[:200]}..."
-                )
-            
             return AIResponse(
                 provider="Anthropic",
-                content=validated_content,
+                content=workout_result.model_dump_json(),
                 model=model,
-                tokens_used=response.usage.input_tokens + response.usage.output_tokens
+                tokens_used=None
             )
         
         except Exception as e:

@@ -8,7 +8,8 @@ With MongoDB integration for conversation storage
 import asyncio
 import time
 from dotenv import load_dotenv
-
+import json
+import aiofiles
 from prompt_creator import PromptCreator
 from services import AIServiceFactory, Provider, PromptMessage, print_response, print_responses
 from database.service import get_db_service
@@ -32,7 +33,6 @@ class AIPromptSender:
         response = await self.factory.send_to_provider(provider, messages, model)
         response_time = time.time() - start_time
         
-        # Save to database if enabled
         if self.enable_database and self.db_service:
             try:
                 await self.db_service.save_conversation(
@@ -132,11 +132,23 @@ async def main():
     )
     system_prompt = prompt_creator.create_prompt()
     #user_prompt = get_user_prompt()
-    messages = [
-        PromptMessage(role="system", content=system_prompt),
-        PromptMessage(role="user", content="Fill BrainScanResult out with random placeholder data")
-    ]
     
+    async with aiofiles.open("test_data/filledScanCollection.json", mode="r") as f:
+        dummy_ui_request = json.loads(await f.read())
+
+    messages = [
+        PromptMessage(role="system", content="""
+You are an expert assistant. Your ONLY task is to generate a valid BrainWorkoutResult JSON object.
+STRICT INSTRUCTIONS:
+- You MUST return a single, fully filled JSON object that strictly matches the provided schema.
+- Do NOT include any extra text, comments, or explanations.
+- Every field must be present and filled according to its description and required tone.
+- If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null.
+- Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure.
+- Double-check your output for completeness and validity before submitting.
+"""),
+        PromptMessage(role="user", content="STRICT INSTRUCTIONS: Output ONLY a valid BrainWorkoutResult JSON object. Do NOT include any extra text or formatting. All fields must be present and filled. Your response will be parsed as JSON.\n" + json.dumps(dummy_ui_request))
+    ]
     print("\nSending prompt to all providers...")
     responses = await sender.send_to_all(messages)
     print_responses(responses)

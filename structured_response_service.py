@@ -1,4 +1,4 @@
-from models.BrainWorkoutResult import BrainScanResult
+from models.BrainWorkoutResult import BrainWorkoutResult
 from google import genai
 import json
 
@@ -13,11 +13,11 @@ class StructuredResponseService:
             contents="Just fill this out with random placeholder data, set the scan_id to 1",
             config={
                 "response_mime_type": "application/json",
-                "response_schema": BrainScanResult,
+                "response_schema": BrainWorkoutResult,
             },
         )
-        my_brain_scan_result = response.parsed
-        return my_brain_scan_result
+        my_brain_workout_result = response.parsed
+        return my_brain_workout_result
     
 if __name__ == "__main__":
     structured_response_service = StructuredResponseService()
