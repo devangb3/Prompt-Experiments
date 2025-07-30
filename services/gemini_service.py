@@ -2,7 +2,7 @@
 Google Gemini service implementation
 """
 
-from typing import List, Optional
+from typing import List
 from google import genai
 from google.genai import types
 from pydantic import ValidationError, BaseModel

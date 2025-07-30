@@ -14,7 +14,7 @@ class BrainWorkoutResult(BaseModel):
 
     skills: Optional[Skill] = Field(default=None, description="""
                     Primary Goal: Generate a complete, 3-level hierarchical skill assessment.
-                    Make sure to fill out the subfields of each non-leaf node skill.
+                    Make sure to fill out the subfields of each non-leaf node
                     1. Use this exact structure:
                     Your output must follow this nested tree structure for the `skills` field.
                     - Level 1 (Root): Neural Power
