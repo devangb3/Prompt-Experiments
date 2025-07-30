@@ -45,13 +45,6 @@ class AIServiceFactory:
             print("Gemini service initialized")
         else:
             print("GEMINI_API_KEY not found in environment")
-        
-        perplexity_key = os.getenv("PERPLEXITY_API_KEY")
-        if perplexity_key:
-            self.services[Provider.PERPLEXITY] = PerplexityService(perplexity_key)
-            print("Perplexity service initialized")
-        else:
-            print("PERPLEXITY_API_KEY not found in environment")
     
     def get_service(self, provider: Provider):
         """Get a specific service by provider"""
@@ -75,8 +68,7 @@ class AIServiceFactory:
         default_models = {
             Provider.OPENAI: "o4-mini",
             Provider.ANTHROPIC: "claude-sonnet-4-20250514",
-            Provider.GEMINI: "gemini-2.5-flash",
-            Provider.PERPLEXITY: "sonar"
+            Provider.GEMINI: "gemini-2.5-pro"
         }
         
         return await service.send_prompt(messages, model or default_models[provider])

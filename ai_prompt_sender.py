@@ -137,15 +137,21 @@ async def main():
         dummy_ui_request = json.loads(await f.read())
 
     messages = [
-        PromptMessage(role="system", content="""Generate a complete `BrainWorkoutResult` object. Your response must be a fully populated JSON object that 
-                      strictly adheres to the provided tool schema. Pay close attention to the `description` of each field, as it contains specific instructions on the 
-                      required content and tone. A successful response requires all fields to be filled.
-                      """),
-        PromptMessage(role="user", content=json.dumps(dummy_ui_request))
+        PromptMessage(role="system", content="""
+You are an expert assistant. Your ONLY task is to generate a valid BrainWorkoutResult JSON object.
+STRICT INSTRUCTIONS:
+- You MUST return a single, fully filled JSON object that strictly matches the provided schema.
+- Do NOT include any extra text, comments, or explanations.
+- Every field must be present and filled according to its description and required tone.
+- If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null.
+- Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure.
+- Double-check your output for completeness and validity before submitting.
+"""),
+        PromptMessage(role="user", content="STRICT INSTRUCTIONS: Output ONLY a valid BrainWorkoutResult JSON object. Do NOT include any extra text or formatting. All fields must be present and filled. Your response will be parsed as JSON.\n" + json.dumps(dummy_ui_request))
     ]
     print("\nSending prompt to all providers...")
-    responses = await sender.send_to_provider(Provider.OPENAI, messages)
-    print_response(responses)
+    responses = await sender.send_to_all(messages)
+    print_responses(responses)
     
     print("\nDatabase Statistics:")
     stats = await sender.get_statistics()

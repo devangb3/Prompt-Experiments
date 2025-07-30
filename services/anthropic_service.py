@@ -49,7 +49,15 @@ class AnthropicService(BaseAIService):
                 messages=[
                     {
                         "role": "user",
-                        "content": f"Analyze this data and provide advice in the exact BrainWorkoutResult JSON format:\n\n{user_msg.content if user_msg else ''}"
+                        "content": (
+                            "STRICT INSTRUCTIONS: You must ONLY return a valid BrainWorkoutResult JSON object. "
+                            "Do NOT include any extra text, comments, or explanations. "
+                            "Every field must be present and filled according to its description. "
+                            "If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null. "
+                            "Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure. "
+                            "Double-check your output for completeness and validity before submitting.\n\n"
+                            f"{user_msg.content if user_msg else ''}"
+                        )
                     }
                 ]
             )

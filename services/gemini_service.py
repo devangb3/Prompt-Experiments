@@ -92,9 +92,18 @@ class GeminiService(BaseAIService):
                 if msg.role == "system":
                     system_prompt = msg.content
                 elif msg.role == "user":
+                    strict_content = (
+                        "STRICT INSTRUCTIONS: You must ONLY return a valid BrainWorkoutResult JSON object. "
+                        "Do NOT include any extra text, comments, or explanations. "
+                        "Every field must be present and filled according to its description. "
+                        "If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null. "
+                        "Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure. "
+                        "Double-check your output for completeness and validity before submitting.\n\n"
+                        + msg.content
+                    )
                     contents.append(types.Content(
                         role="user",
-                        parts=[types.Part(text=msg.content)]
+                        parts=[types.Part(text=strict_content)]
                     ))
             
            

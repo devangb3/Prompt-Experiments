@@ -36,7 +36,21 @@ class OpenAIService(BaseAIService):
                 "parameters": BrainWorkoutResult.model_json_schema()
             }
 
-            openai_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+            openai_messages = []
+            for msg in messages:
+                if msg.role == "user":
+                    strict_content = (
+                        "STRICT INSTRUCTIONS: You must ONLY return a valid BrainWorkoutResult JSON object. "
+                        "Do NOT include any extra text, comments, or explanations. "
+                        "Every field must be present and filled according to its description. "
+                        "If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null. "
+                        "Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure. "
+                        "Double-check your output for completeness and validity before submitting.\n\n"
+                        + msg.content
+                    )
+                    openai_messages.append({"role": msg.role, "content": strict_content})
+                else:
+                    openai_messages.append({"role": msg.role, "content": msg.content})
             
             response = self.client.responses.create(
                 model="gpt-4.1",
