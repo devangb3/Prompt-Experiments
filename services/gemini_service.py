@@ -125,11 +125,11 @@ class GeminiService(BaseAIService):
             tool_args = function_call.args
             
             if function_call.name == "save_brain_workout_result":
-                print("✅ LLM responded with the correct tool. Validating data...")
+                print("LLM responded with the correct tool. Validating data...")
                 workout_result = BrainWorkoutResult.model_validate(tool_args)
-                print("✅ Data validation successful!")
+                print("Data validation successful!")
             else:
-                print(f"❌ Error: LLM responded with an unexpected tool: {function_call.name}")
+                print(f"Error: LLM responded with an unexpected tool: {function_call.name}")
                 return AIResponse(
                     provider="Gemini",
                     content="",

@@ -133,11 +133,14 @@ async def main():
     system_prompt = prompt_creator.create_prompt()
     #user_prompt = get_user_prompt()
     
-    async with aiofiles.open("scanCollection.json", mode="r") as f:
+    async with aiofiles.open("filledScanCollection.json", mode="r") as f:
         dummy_ui_request = json.loads(await f.read())
 
     messages = [
-        PromptMessage(role="system", content="Fill out BrainWorkoutResult with any placeholder values. I just want to test the response format. make sure to fill out all fields as specifiied in the schema descriptions."),
+        PromptMessage(role="system", content="""Generate a complete `BrainWorkoutResult` object. Your response must be a fully populated JSON object that 
+                      strictly adheres to the provided tool schema. Pay close attention to the `description` of each field, as it contains specific instructions on the 
+                      required content and tone. A successful response requires all fields to be filled.
+                      """),
         PromptMessage(role="user", content=json.dumps(dummy_ui_request))
     ]
     print("\nSending prompt to all providers...")
