@@ -144,7 +144,7 @@ async def main():
         PromptMessage(role="user", content=json.dumps(dummy_ui_request))
     ]
     print("\nSending prompt to all providers...")
-    responses = await sender.send_to_provider(Provider.ANTHROPIC, messages)
+    responses = await sender.send_to_provider(Provider.OPENAI, messages)
     print_response(responses)
     
     print("\nDatabase Statistics:")

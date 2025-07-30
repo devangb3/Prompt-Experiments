@@ -49,7 +49,7 @@ class AnthropicService(BaseAIService):
                 messages=[
                     {
                         "role": "user",
-                        "content": f"Please analyze this data and provide advice in the exact BrainWorkoutResult JSON format:\n\n{user_msg.content if user_msg else ''}"
+                        "content": f"Analyze this data and provide advice in the exact BrainWorkoutResult JSON format:\n\n{user_msg.content if user_msg else ''}"
                     }
                 ]
             )

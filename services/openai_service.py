@@ -7,7 +7,7 @@ from openai import OpenAI
 from models.BrainWorkoutResult import BrainWorkoutResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
-
+import json
 
 class OpenAIService(BaseAIService):
     """OpenAI API service"""
@@ -28,20 +28,33 @@ class OpenAIService(BaseAIService):
             )
         
         try:
+            
+            save_workout_tool = {
+                "type": "function",
+                "name": "save_brain_workout_result",
+                "description": "Saves the complete analysis of a brain workout session. Make sure to fill out EVERY field in the JSON schema. Success is indicated by the LLM returning the filled out JSON object.",
+                "parameters": BrainWorkoutResult.model_json_schema()
+            }
+
             openai_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
             
-            response = self.client.chat.completions.parse(
-                model=model,
-                messages=openai_messages,
-                response_format=BrainWorkoutResult
+            response = self.client.responses.create(
+                model="gpt-4.1",
+                input=openai_messages,
+                tools=[save_workout_tool]
             )
             
-            # Parse the response to validate it's a valid BrainWorkoutResult
-            brain_workout_result = BrainWorkoutResult.model_validate_json(response.choices[0].message.content)
+            tool_call = response.output[0]
+            tool_args = json.loads(tool_call.arguments)
+
+            if tool_call.name == "save_brain_workout_result":
+                print("LLM responded with the correct tool. Validating data...")
+                workout_result = BrainWorkoutResult.model_validate(tool_args)
+                print("Data validation successful!")
             
             return AIResponse(
                 provider="OpenAI",
-                content=brain_workout_result.model_dump_json(),
+                content=workout_result.model_dump_json(),
                 model=model,
                 tokens_used=response.usage.total_tokens if response.usage else None
             )
