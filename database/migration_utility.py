@@ -6,6 +6,7 @@ import asyncio
 import os
 from typing import List, Dict, Any
 from datetime import datetime
+from dotenv import load_dotenv
 from .service import get_db_service
 from .xano_service import get_xano_db_service
 from .models import Conversation
@@ -219,6 +220,9 @@ async def main():
     """Main function for running migration"""
     import argparse
     
+    # Load environment variables first
+    load_dotenv()
+    
     parser = argparse.ArgumentParser(description="Migrate conversations from MongoDB to Xano")
     parser.add_argument("--dry-run", action="store_true", help="Simulate migration without transferring data")
     parser.add_argument("--batch-size", type=int, default=100, help="Number of conversations per batch")
@@ -226,11 +230,11 @@ async def main():
     parser.add_argument("--verify-sample-size", type=int, default=10, help="Number of conversations to verify")
     
     args = parser.parse_args()
-    
+
     if not os.getenv('XANO_BASE_URL'):
         print("Error: XANO_BASE_URL environment variable must be set")
+
         return
-    
     if not os.getenv('XANO_API_TOKEN'):
         print("Warning: XANO_API_TOKEN not set - using public endpoints")
     

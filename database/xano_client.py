@@ -24,7 +24,7 @@ class XanoClient:
     
     def __init__(self):
         self.base_url = os.getenv('XANO_BASE_URL', 'https://your-workspace.xano.com/api:version')
-        self.api_token = os.getenv('XANO_API_TOKEN', '')
+        self.api_token = os.getenv('XANO_API_TOKEN', '')  # Optional for public endpoints
         self.timeout = float(os.getenv('XANO_TIMEOUT', '30.0'))
         self._client: Optional[httpx.AsyncClient] = None
         self._initialized = False
@@ -36,7 +36,7 @@ class XanoClient:
                 'Content-Type': 'application/json'
             }
             
-
+            # Only add Authorization header if API token is provided
             if self.api_token:
                 headers['Authorization'] = f'Bearer {self.api_token}'
             
@@ -107,9 +107,14 @@ class XanoClient:
         return await self._make_request('POST', '/conversations', data=conversation_data)
     
     async def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
-        """Get a conversation by ID"""
+        """Get a conversation by conversation_id (not Xano's internal ID)"""
         try:
-            return await self._make_request('GET', f'/conversations/{conversation_id}')
+            params = {'search': conversation_id}
+            response = await self._make_request('GET', '/conversations/search', params=params)
+            
+            conversations = response if isinstance(response, list) else response.get('data', [])
+            return conversations[0] if conversations else None
+            
         except XanoAPIError as e:
             if e.status_code == 404:
                 return None
@@ -118,18 +123,28 @@ class XanoClient:
     async def get_conversations(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """Get all conversations with pagination"""
         params = {'limit': limit, 'offset': offset}
-        response = await self._make_request('GET', '/conversations', params=params)
-        # Xano typically returns data in a 'data' field or directly as list
+        response = await self._make_request('GET', '/conversations/list', params=params)
         return response if isinstance(response, list) else response.get('data', [])
     
     async def update_conversation(self, conversation_id: str, conversation_data: Dict) -> Dict[str, Any]:
-        """Update an existing conversation"""
-        return await self._make_request('PUT', f'/conversations/{conversation_id}', data=conversation_data)
+        """Update an existing conversation by conversation_id"""
+        # First get the Xano ID by conversation_id
+        existing = await self.get_conversation(conversation_id)
+        if not existing:
+            raise XanoAPIError(f"Conversation not found: {conversation_id}", status_code=404)
+            
+        xano_id = existing.get('id')
+        return await self._make_request('PUT', f'/conversations/{xano_id}', data=conversation_data)
     
     async def delete_conversation(self, conversation_id: str) -> bool:
-        """Delete a conversation"""
+        """Delete a conversation by conversation_id"""
         try:
-            await self._make_request('DELETE', f'/conversations/{conversation_id}')
+            existing = await self.get_conversation(conversation_id)
+            if not existing:
+                return False
+                
+            xano_id = existing.get('id')
+            await self._make_request('DELETE', f'/conversations/{xano_id}')
             return True
         except XanoAPIError as e:
             if e.status_code == 404:
