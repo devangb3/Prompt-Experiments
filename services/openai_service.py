@@ -68,59 +68,44 @@ class OpenAIService(BaseAIService):
     async def validate_response(self, tool_call , action : str, model : str, tokens_used : Optional[int] = None) -> AIResponse:
         """Validate the response of the LLM"""
         if action == "generate_workout_result":
-            if tool_call.name == "save_brain_workout_result":
-                print("LLM responded with the correct tool. Validating data...")
-                tool_args = json.loads(tool_call.arguments)
-                try:
-                    workout_result = BrainWorkoutResult.model_validate(tool_args)
-                    print("Data validation successful!")
-                    return AIResponse(
-                        provider="OpenAI",
-                        content=workout_result.model_dump_json(),
-                        model=model,
-                        tokens_used=tokens_used if tokens_used else None
-                    )
-                except Exception as e:
-                    return AIResponse(
-                        provider="OpenAI",
-                        content="",
-                        model=model,
-                        error=str(e)
-                    )
-            else:
+            print("LLM responded with the correct tool. Validating data...")
+            tool_args = json.loads(tool_call.arguments)
+            try:
+                workout_result = BrainWorkoutResult.model_validate(tool_args)
+                print("Data validation successful!")
+                return AIResponse(
+                    provider="OpenAI",
+                    content=workout_result.model_dump_json(),
+                    model=model,
+                    tokens_used=tokens_used if tokens_used else None
+                )
+            except Exception as e:
                 return AIResponse(
                     provider="OpenAI",
                     content="",
                     model=model,
-                    error="Wrong tool call"
+                    error=str(e)
                 )
         elif action == "judge_response":
-            if tool_call.name == "judge_response":
-                print("LLM responded with the correct tool. Validating data...")
-                tool_args = json.loads(tool_call.arguments)
-                try:
-                    judge_response = JudgeResponse.model_validate(tool_args)
-                    print("Data validation successful!")
-                    return AIResponse(
-                        provider="OpenAI",
-                        content=judge_response.model_dump_json(),
-                        model=model,
-                        tokens_used=tokens_used if tokens_used else None
-                    )
-                except Exception as e:
-                    return AIResponse(
-                        provider="OpenAI",
-                        content="",
-                        model=model,
-                        error=str(e)
-                    )
-            else:
+            print("LLM responded with the correct tool. Validating data...")
+            tool_args = json.loads(tool_call.arguments)
+            try:
+                judge_response = JudgeResponse.model_validate(tool_args)
+                print("Data validation successful!")
+                return AIResponse(
+                    provider="OpenAI",
+                    content=judge_response.model_dump_json(),
+                    model=model,
+                    tokens_used=tokens_used if tokens_used else None
+                )
+            except Exception as e:
                 return AIResponse(
                     provider="OpenAI",
                     content="",
                     model=model,
-                    error="Wrong tool call"
+                    error=str(e)
                 )
+            
 
     async def send_prompt(self, messages: List[PromptMessage], model: str = "gpt-4.1", action : str = "generate_workout_result") -> AIResponse:
         """Send prompt to OpenAI"""
