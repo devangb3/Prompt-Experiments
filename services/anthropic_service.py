@@ -18,7 +18,7 @@ class AnthropicService(BaseAIService):
         if self.api_key:
             self.client = anthropic.Anthropic(api_key=self.api_key)
     
-    async def send_prompt(self, messages: List[PromptMessage], model: str = "claude-sonnet-4-20250514") -> AIResponse:
+    async def send_prompt(self, messages: List[PromptMessage], model: str = "claude-sonnet-4-20250514", action: str = None) -> AIResponse:
         """Send prompt to Anthropic Claude"""
         if not self.client:
             return AIResponse(

@@ -74,7 +74,7 @@ class GeminiService(BaseAIService):
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
     
-    async def send_prompt(self, messages: List[PromptMessage], model: str = "gemini-2.5-flash") -> AIResponse:
+    async def send_prompt(self, messages: List[PromptMessage], model: str = "gemini-2.5-flash", action: str = None) -> AIResponse:
         """Send prompt to Google Gemini"""
         if not self.client:
             return AIResponse(
