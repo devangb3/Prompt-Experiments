@@ -107,14 +107,10 @@ class XanoClient:
         return await self._make_request('POST', '/conversations', data=conversation_data)
     
     async def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
-        """Get a conversation by conversation_id (not Xano's internal ID)"""
+        """Get a conversation by conversation_id"""
         try:
-            params = {'search': conversation_id}
-            response = await self._make_request('GET', '/conversations/search', params=params)
-            
-            conversations = response if isinstance(response, list) else response.get('data', [])
-            return conversations[0] if conversations else None
-            
+            response = await self._make_request('GET', f'/conversations/{conversation_id}')
+            return response
         except XanoAPIError as e:
             if e.status_code == 404:
                 return None
@@ -123,28 +119,17 @@ class XanoClient:
     async def get_conversations(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
         """Get all conversations with pagination"""
         params = {'limit': limit, 'offset': offset}
-        response = await self._make_request('GET', '/conversations/list', params=params)
+        response = await self._make_request('GET', '/conversations', params=params)
         return response if isinstance(response, list) else response.get('data', [])
     
     async def update_conversation(self, conversation_id: str, conversation_data: Dict) -> Dict[str, Any]:
-        """Update an existing conversation by conversation_id"""
-        # First get the Xano ID by conversation_id
-        existing = await self.get_conversation(conversation_id)
-        if not existing:
-            raise XanoAPIError(f"Conversation not found: {conversation_id}", status_code=404)
-            
-        xano_id = existing.get('id')
-        return await self._make_request('PUT', f'/conversations/{xano_id}', data=conversation_data)
+        """Update an existing conversation"""
+        return await self._make_request('PUT', f'/conversations/{conversation_id}', data=conversation_data)
     
     async def delete_conversation(self, conversation_id: str) -> bool:
-        """Delete a conversation by conversation_id"""
+        """Delete a conversation"""
         try:
-            existing = await self.get_conversation(conversation_id)
-            if not existing:
-                return False
-                
-            xano_id = existing.get('id')
-            await self._make_request('DELETE', f'/conversations/{xano_id}')
+            await self._make_request('DELETE', f'/conversations/{conversation_id}')
             return True
         except XanoAPIError as e:
             if e.status_code == 404:

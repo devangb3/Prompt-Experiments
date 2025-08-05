@@ -66,7 +66,7 @@ class AIServiceFactory:
             )
         
         default_models = {
-            Provider.OPENAI: "o4-mini",
+            Provider.OPENAI: "gpt-4.1",
             Provider.ANTHROPIC: "claude-sonnet-4-20250514",
             Provider.GEMINI: "gemini-2.5-pro"
         }

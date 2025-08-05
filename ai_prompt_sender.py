@@ -162,7 +162,7 @@ STRICT INSTRUCTIONS:
         PromptMessage(role="user", content="STRICT INSTRUCTIONS: Output ONLY a valid BrainWorkoutResult JSON object. Do NOT include any extra text or formatting. All fields must be present and filled. Your response will be parsed as JSON.\n" + json.dumps(dummy_ui_request))
     ]
     print("\nSending prompt to all providers...")
-    responses = await sender.send_to_all(messages)
+    responses = await sender.send_to_all(Provider.OPENAI, messages)
     print_responses(responses)
     
     
