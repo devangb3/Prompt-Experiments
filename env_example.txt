@@ -1,0 +1,24 @@
+# AI Service API Keys
+OPENAI_API_KEY=your_openai_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+GOOGLE_API_KEY=your_google_api_key_here
+PERPLEXITY_API_KEY=your_perplexity_api_key_here
+
+# Database Configuration
+# Choose your database provider: "mongodb" or "xano"
+DATABASE_PROVIDER=mongodb
+
+# MongoDB Configuration (used when DATABASE_PROVIDER=mongodb)
+MONGO_URI=mongodb://localhost:27017
+MONGO_DATABASE=ai_prompt_sender
+
+# Xano Configuration (used when DATABASE_PROVIDER=xano)
+# Replace 'your-workspace' with your actual Xano workspace URL
+XANO_BASE_URL=https://your-workspace.xano.com/api:v1
+# XANO_API_TOKEN=your_xano_api_token_here  # Optional - only needed for private endpoints
+XANO_TIMEOUT=30.0
+
+# Optional: AI Service Configuration
+# MODEL_OVERRIDE_OPENAI=gpt-4
+# MODEL_OVERRIDE_ANTHROPIC=claude-3-sonnet-20240229
+# MODEL_OVERRIDE_GEMINI=gemini-pro 

@@ -2,7 +2,7 @@
 """
 AI Prompt Sender - Send prompts to multiple AI providers
 Supports: OpenAI, Anthropic (Claude), Google Gemini, and Perplexity
-With MongoDB integration for conversation storage
+With database integration (MongoDB or Xano) for conversation storage
 """
 
 import asyncio
@@ -12,20 +12,20 @@ import json
 import aiofiles
 from prompt_creator import PromptCreator
 from services import AIServiceFactory, Provider, PromptMessage, print_response, print_responses
-from database.service import get_db_service
+from database.service_factory import get_database_service
 from database.connection import close_database
 
 load_dotenv()
 
 
 class AIPromptSender:
-    """Main class for sending prompts to AI providers using the new service structure"""
+    """Main class for sending prompts to AI providers with database integration"""
     
     def __init__(self, enable_database: bool = True):
         """Initialize with the service factory"""
         self.factory = AIServiceFactory()
         self.enable_database = enable_database
-        self.db_service = get_db_service() if enable_database else None
+        self.db_service = get_database_service() if enable_database else None
     
     async def send_to_provider(self, provider: Provider, messages: list[PromptMessage], model: str = None):
         """Send prompt to a specific provider"""
@@ -100,11 +100,23 @@ class AIPromptSender:
 
 
 async def main():
-    """Example usage of the refactored AI Prompt Sender with database integration"""
+    """Example usage of the AI Prompt Sender with configurable database integration"""
     sender = AIPromptSender()
     
-    print("AI Prompt Sender with MongoDB Integration")
+    print("AI Prompt Sender with Database Integration")
     print("=" * 50)
+    
+    # Show database configuration
+    from database.connection import get_connection_info
+    db_info = get_connection_info()
+    print(f"Database Provider: {db_info['provider']}")
+    if db_info['provider'] == 'MongoDB':
+        print(f"MongoDB URI: {db_info['uri']}")
+        print(f"Database: {db_info['database']}")
+    else:
+        print(f"Xano Base URL: {db_info['base_url']}")
+        print(f"Has API Token: {db_info['has_token']}")
+    print()
     
     prompt_template = """
                     {LLM_FRAMING_1}
@@ -150,16 +162,9 @@ STRICT INSTRUCTIONS:
         PromptMessage(role="user", content="STRICT INSTRUCTIONS: Output ONLY a valid BrainWorkoutResult JSON object. Do NOT include any extra text or formatting. All fields must be present and filled. Your response will be parsed as JSON.\n" + json.dumps(dummy_ui_request))
     ]
     print("\nSending prompt to all providers...")
-    responses = await sender.send_to_all(messages)
-    print_responses(responses)
+    responses = await sender.send_to_provider(Provider.OPENAI, messages)
+    print_response(responses)
     
-    print("\nDatabase Statistics:")
-    stats = await sender.get_statistics()
-    print(f"Total conversations: {stats['total_conversations']}")
-    print(f"Total responses: {stats['total_responses']}")
-    print("Provider stats:")
-    for provider, count in stats['provider_stats'].items():
-        print(f"  {provider}: {count}")
     
     print("\nRecent Conversations:")
     conversations = await sender.get_conversation_history(limit=3)
