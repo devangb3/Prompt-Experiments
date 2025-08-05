@@ -45,11 +45,11 @@ class JudgeService:
         
         return response
         
-    async def judge_response(self, provider: str, original_response: str, user_prompt: str) -> AIResponse:
+    async def judge_response(self, provider: str, original_response: str, ui_request: str) -> AIResponse:
         """Judge an LLM response using another LLM"""
         
         user_prompt = JUDGE_USER_PROMPT.format(
-            user_prompt=user_prompt,
+            user_prompt=ui_request,
             original_response=original_response
         )
         system_prompt = """ You are an expert evaluator of AI-generated content.
