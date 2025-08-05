@@ -3,8 +3,13 @@ Database connection management for MongoDB and Xano
 """
 
 import os
+import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Global database client for MongoDB
 _client: Optional[AsyncIOMotorClient] = None
@@ -18,6 +23,12 @@ class DatabaseConnection:
     def get_provider_type() -> str:
         """Get the configured database provider from environment"""
         provider = os.getenv('DATABASE_PROVIDER', 'mongodb').lower()
+        logger.info(f"Database provider configured as: {provider}")
+        logger.info(f"DATABASE_PROVIDER environment variable: {'is set' if 'DATABASE_PROVIDER' in os.environ else 'is NOT set'}")
+        if 'DATABASE_PROVIDER' in os.environ:
+            logger.info(f"Actual DATABASE_PROVIDER value: {os.environ['DATABASE_PROVIDER']}")
+        else:
+            logger.info("Using default provider: mongodb")
         return provider
 
     @staticmethod
@@ -35,21 +46,28 @@ async def get_database():
     """Get the MongoDB database instance (only used when MongoDB is configured)"""
     global _client, _database
     
-    if not DatabaseConnection.is_mongodb_enabled():
+    provider_enabled = DatabaseConnection.is_mongodb_enabled()
+    logger.info(f"Attempting database connection. MongoDB enabled: {provider_enabled}")
+    
+    if not provider_enabled:
+        logger.error("MongoDB connection attempted but MongoDB is not the configured provider")
         raise RuntimeError("MongoDB is not the configured database provider. Check DATABASE_PROVIDER environment variable.")
     
     if _database is None:
         mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
         database_name = os.getenv('MONGO_DATABASE', 'ai_prompt_sender')
         
+        logger.info(f"Connecting to MongoDB database: {database_name}")
+        logger.info(f"Using MongoDB URI: {mongo_uri}")
+        
         _client = AsyncIOMotorClient(mongo_uri)
         _database = _client[database_name]
         
         try:
             await _client.admin.command('ping')
-            print(f"Connected to MongoDB: {database_name}")
+            logger.info(f"Successfully connected to MongoDB: {database_name}")
         except Exception as e:
-            print(f"Failed to connect to MongoDB: {e}")
+            logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise
     
     return _database
@@ -82,9 +100,10 @@ def get_collection(collection_name: str):
 def get_connection_info() -> dict:
     """Get information about the current database configuration"""
     provider = DatabaseConnection.get_provider_type()
+    logger.info(f"Getting connection info for provider: {provider}")
     
     if provider == "mongodb":
-        return {
+        info = {
             "provider": "MongoDB",
             "uri": os.getenv('MONGO_URI', 'mongodb://localhost:27017'),
             "database": os.getenv('MONGO_DATABASE', 'ai_prompt_sender'),
@@ -92,10 +111,13 @@ def get_connection_info() -> dict:
         }
     else:
         api_token = os.getenv('XANO_API_TOKEN')
-        return {
+        info = {
             "provider": "Xano",
             "base_url": os.getenv('XANO_BASE_URL', 'https://your-workspace.xano.com/api:version'),
             "has_token": bool(api_token),
             "endpoint_type": "Private" if api_token else "Public",
             "timeout": os.getenv('XANO_TIMEOUT', '30.0')
-        } 
+        }
+    
+    logger.info(f"Connection info: {info}")
+    return info 
