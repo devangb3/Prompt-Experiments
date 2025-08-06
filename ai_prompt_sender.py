@@ -150,24 +150,24 @@ async def main():
 
     messages = [
         PromptMessage(role="system", content="""
-You are an expert assistant. Your ONLY task is to generate a valid BrainWorkoutResult JSON object.
-STRICT INSTRUCTIONS:
-- You MUST return a single, fully filled JSON object that strictly matches the provided schema.
-- Do NOT include any extra text, comments, or explanations.
-- Every field must be present and filled according to its description and required tone.
-- If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null.
-- Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure.
-- Double-check your output for completeness and validity before submitting.
-"""),
+        You are an expert assistant. Your ONLY task is to generate a valid BrainWorkoutResult JSON object.
+        STRICT INSTRUCTIONS:
+        - You MUST return a single, fully filled JSON object that strictly matches the provided schema.
+        - Do NOT include any extra text, comments, or explanations.
+        - Every field must be present and filled according to its description and required tone.
+        - If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null.
+        - Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure.
+        - Double-check your output for completeness and validity before submitting.
+        """),
         PromptMessage(role="user", content="STRICT INSTRUCTIONS: Output ONLY a valid BrainWorkoutResult JSON object. Do NOT include any extra text or formatting. All fields must be present and filled. Your response will be parsed as JSON.\n" + json.dumps(dummy_ui_request))
     ]
     print("\nSending prompt to all providers...")
-    responses = await sender.send_to_provider(Provider.ANTHROPIC, messages, action="generate_workout_result")
+    responses = await sender.send_to_provider(Provider.GEMINI, messages, action="generate_workout_result")
     print_response(responses)
     
     print("\n Judging responses...")
     judge = JudgeService()
-    judged_responses = await judge.judge_response(Provider.ANTHROPIC, responses, dummy_ui_request)
+    judged_responses = await judge.judge_response(Provider.GEMINI, responses, dummy_ui_request)
     print_response(judged_responses)
     
     await sender.close()

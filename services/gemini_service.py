@@ -2,13 +2,15 @@
 Google Gemini service implementation
 """
 
-from typing import List
+from typing import List, Optional
 from google import genai
 from google.genai import types
 from pydantic import ValidationError, BaseModel
 from models.BrainWorkoutResult import BrainWorkoutResult
+from models.JudgeResponse import JudgeResponse
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
+import json
 
 
 def get_flattened_schema(cls: BaseModel):
@@ -74,7 +76,171 @@ class GeminiService(BaseAIService):
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
     
-    async def send_prompt(self, messages: List[PromptMessage], model: str = "gemini-2.5-flash", action: str = None) -> AIResponse:
+    async def get_messages(self, tool: str, messages: List[PromptMessage]) -> dict:
+        """Get messages for the given tool"""
+        contents = []
+        system_prompt = ""
+        
+        if tool == "generate_workout_result":
+            for msg in messages:
+                if msg.role == "system":
+                    enhanced_content = (
+                        msg.content + 
+                        "\n\nCRITICAL INSTRUCTIONS: You MUST use the 'save_brain_workout_result' function to return your analysis. "
+                        "Do NOT return JSON as plain text in your response. The ONLY acceptable way to respond is by calling the function. "
+                        "COMPLETENESS REQUIREMENT: Every single field in the schema must be filled with meaningful content. "
+                        "NO null values, NO empty strings, NO missing fields are allowed. "
+                        "If you're unsure about a value, make a reasonable guess based on the context provided. "
+                        "The response will be strictly validated - incomplete responses will be rejected."
+                    )
+                    system_prompt = enhanced_content
+                elif msg.role == "user":
+                    strict_content = (
+                        "CRITICAL: You must ONLY use the 'save_brain_workout_result' function to return your response. "
+                        "Do NOT include any extra text, comments, or explanations outside the function call. "
+                        "Do NOT return JSON as plain text content. "
+                        "MANDATORY: Every field must be present and filled according to its description. "
+                        "NO NULL VALUES ALLOWED - if you're unsure, make a reasonable guess. "
+                        "ALL arrays must contain the required number of elements. "
+                        "ALL objects must have ALL required properties filled. "
+                        "Use the function - do not return text.\n\n"
+                        + msg.content
+                    )
+                    contents.append(types.Content(
+                        role="user",
+                        parts=[types.Part(text=strict_content)]
+                    ))
+                else:
+                    contents.append(types.Content(
+                        role=msg.role,
+                        parts=[types.Part(text=msg.content)]
+                    ))
+        
+        elif tool == "judge_response":
+            for msg in messages:
+                if msg.role == "system":
+                    enhanced_content = (
+                        msg.content + 
+                        "\n\nCRITICAL INSTRUCTIONS: You MUST use the 'save_brain_workout_result' function..."
+                        "COMPLETENESS REQUIREMENT: Every single field in the schema must be filled. "
+                        "**If a value is unknown or cannot be determined from the context, you MUST write the string 'Not applicable' or 'Unknown' instead of providing a null value.** "
+                        "NO null values, NO empty strings, and NO missing fields are allowed."
+                    )
+                    system_prompt = enhanced_content
+                elif msg.role == "user":
+                    enhanced_content = (
+                        "CRITICAL: Use the 'judge_response' function with proper JSON structure. "
+                        "ALL FIVE FIELDS REQUIRED: clarity, specificity, relevance, actionability, approachability. "
+                        "Each field must be an object with 'score' (1-5) and 'reason' properties. "
+                        "NO null values allowed anywhere. Complete all fields or the response will fail validation.\n\n" + msg.content
+                    )
+                    contents.append(types.Content(
+                        role="user",
+                        parts=[types.Part(text=enhanced_content)]
+                    ))
+                else:
+                    contents.append(types.Content(
+                        role=msg.role,
+                        parts=[types.Part(text=msg.content)]
+                    ))
+        
+        return {"contents": contents, "system_prompt": system_prompt}
+    
+    async def get_tool(self, tool: str) -> types.FunctionDeclaration:
+        """Get tool for the given tool"""
+        if tool == "generate_workout_result":
+            schema = get_flattened_schema(BrainWorkoutResult)
+            return types.FunctionDeclaration(
+                name="save_brain_workout_result",
+                description="""CRITICAL: You MUST use this function to save the complete analysis of a brain workout session. This is the ONLY acceptable way to return your response. Do NOT return JSON as plain text. 
+
+                                MANDATORY REQUIREMENTS:
+                                - Fill out EVERY single field in the JSON schema - NO null values allowed
+                                - Every object must have ALL required properties filled
+                                - All arrays must contain the required number of elements
+                                - All text fields must contain meaningful, specific content
+                                - If you're unsure about a value, make a reasonable guess based on the context
+                                - Success is indicated ONLY by returning a completely filled JSON object with NO missing or null fields
+
+                                VALIDATION: The response will be strictly validated against the schema. Any missing, null, or incomplete fields will result in failure.""",
+                parameters=schema
+            )
+        
+        elif tool == "judge_response":
+            schema = get_flattened_schema(JudgeResponse)
+            return types.FunctionDeclaration(
+                name="judge_response",
+                description="""CRITICAL: You MUST use this function to judge the response of the LLM. This is the ONLY acceptable way to return your judgment. Do NOT return JSON as plain text.
+                MANDATORY REQUIREMENTS:
+                - ALL five fields (clarity, specificity, relevance, actionability, approachability) MUST be completed
+                - Each field MUST be a JSON object with BOTH "score" and "reason" properties
+                - NO null values are allowed anywhere
+                - Scores must be integers from 1-5
+                - Reasons must be meaningful explanations (not null or empty)
+
+                EXACT REQUIRED STRUCTURE:
+                {
+                "clarity": {"score": <1-5>, "reason": "<detailed explanation>"},
+                "specificity": {"score": <1-5>, "reason": "<detailed explanation>"},
+                "relevance": {"score": <1-5>, "reason": "<detailed explanation>"},
+                "actionability": {"score": <1-5>, "reason": "<detailed explanation>"},
+                "approachability": {"score": <1-5>, "reason": "<detailed explanation>"}
+                }
+
+                VALIDATION: Any missing fields, null values, or incomplete objects will result in failure.""",
+                parameters=schema
+            )
+        
+        else:
+            return None
+    
+    async def validate_response(self, function_call, action: str, model: str, tokens_used: Optional[int] = None) -> AIResponse:
+        """Validate the response of the LLM"""
+        if action == "generate_workout_result":
+            print("LLM responded with the correct function. Validating data...")
+            tool_args = function_call.args
+            print(f"Tool args received: {tool_args}")
+                       
+            try:
+                workout_result = BrainWorkoutResult.model_validate(tool_args)
+                print("Data validation successful!")
+                return AIResponse(
+                    provider="Gemini",
+                    content=workout_result.model_dump_json(),
+                    model=model,
+                    tokens_used=tokens_used if tokens_used else None
+                )
+            except Exception as e:
+                print(f"Validation error for BrainWorkoutResult: {e}")
+                return AIResponse(
+                    provider="Gemini",
+                    content="",
+                    model=model,
+                    error=f"Validation failed: {e}"
+                )
+        elif action == "judge_response":
+            print("LLM responded with the correct function. Validating data...")
+            tool_args = function_call.args
+                        
+            try:
+                judge_response = JudgeResponse.model_validate(tool_args)
+                print("Data validation successful!")
+                return AIResponse(
+                    provider="Gemini",
+                    content=judge_response.model_dump_json(),
+                    model=model,
+                    tokens_used=tokens_used if tokens_used else None
+                )
+            except Exception as e:
+                print(f"Direct validation failed: {e}")
+                return AIResponse(
+                    provider="Gemini",
+                    content="",
+                    model=model,
+                    error=f"Validation failed: {e}"
+                )
+    
+    async def send_prompt(self, messages: List[PromptMessage], model: str = "gemini-2.5-pro", action: str = "generate_workout_result") -> AIResponse:
         """Send prompt to Google Gemini"""
         if not self.client:
             return AIResponse(
@@ -85,72 +251,111 @@ class GeminiService(BaseAIService):
             )
         
         try:
+            tool_declaration = await self.get_tool(action)
+            if not tool_declaration:
+                return AIResponse(
+                    provider="Gemini",
+                    content="",
+                    model=model,
+                    error="Tool not found"
+                )
             
-            contents = []
-            system_prompt = ""
-            for msg in messages:
-                if msg.role == "system":
-                    system_prompt = msg.content
-                elif msg.role == "user":
-                    strict_content = (
-                        "STRICT INSTRUCTIONS: You must ONLY return a valid BrainWorkoutResult JSON object. "
-                        "Do NOT include any extra text, comments, or explanations. "
-                        "Every field must be present and filled according to its description. "
-                        "If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null. "
-                        "Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure. "
-                        "Double-check your output for completeness and validity before submitting.\n\n"
-                        + msg.content
-                    )
-                    contents.append(types.Content(
-                        role="user",
-                        parts=[types.Part(text=strict_content)]
-                    ))
+            message_data = await self.get_messages(action, messages)
+            contents = message_data["contents"]
+            system_prompt = message_data["system_prompt"]
             
-           
-            schema = get_flattened_schema(BrainWorkoutResult)
+            tools = types.Tool(function_declarations=[tool_declaration])
             
-            save_workout_tool = types.FunctionDeclaration(
-                name="save_brain_workout_result",
-                description="Saves the complete analysis of a brain workout session.",
-                parameters=schema
-            )
-
-            tools = types.Tool(function_declarations=[save_workout_tool])
             config = types.GenerateContentConfig(
                 system_instruction=system_prompt, 
                 tools=[tools],
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 tool_config=types.ToolConfig(
                     function_calling_config=types.FunctionCallingConfig(mode='ANY')
-                ))
+                ),
+                temperature=0.1,  # Lower temperature for more consistent, complete responses
+                top_p=0.8,       # Slightly constrained sampling for better structure
+                max_output_tokens=60000 
+            )
            
             response = self.client.models.generate_content(
-                model="gemini-2.5-pro",
+                model=model,
                 contents=contents,
                 config=config,
             )
-
-            function_call = response.candidates[0].content.parts[0].function_call
-            tool_args = function_call.args
             
-            if function_call.name == "save_brain_workout_result":
-                print("LLM responded with the correct tool. Validating data...")
-                workout_result = BrainWorkoutResult.model_validate(tool_args)
-                print("Data validation successful!")
-            else:
-                print(f"Error: LLM responded with an unexpected tool: {function_call.name}")
+            tokens_used = None
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                tokens_used = response.usage_metadata.total_token_count
+            
+            if not response.candidates or not response.candidates[0].content.parts:
                 return AIResponse(
                     provider="Gemini",
                     content="",
                     model=model,
-                    error=f"LLM responded with an unexpected tool: {function_call.name}"
+                    error="LLM returned an empty response.",
+                    tokens_used=tokens_used
                 )
             
+            finish_reason = response.candidates[0].finish_reason
+            print(f"Model finished with reason: {finish_reason}")
+
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'function_call') and part.function_call:
+                    function_call = part.function_call
+                    if function_call.name == tool_declaration.name:
+                        return await self.validate_response(function_call, action, model, tokens_used)
+                    else:
+                        return AIResponse(
+                            provider="Gemini",
+                            content="",
+                            model=model,
+                            error=f"LLM responded with an unexpected function: {function_call.name}",
+                            tokens_used=tokens_used
+                        )
+            
+            content_text = ""
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'text'):
+                    content_text += part.text
+            
+            if content_text.strip():
+                json_text = content_text.strip()
+                if json_text.startswith('```json'):
+                    json_text = json_text.replace('```json', '').replace('```', '').strip()
+                elif json_text.startswith('```'):
+                    json_text = json_text.replace('```', '').strip()
+                
+                
+                parsed_data = json.loads(json_text)
+                
+                if action == "generate_workout_result":
+                    workout_result = BrainWorkoutResult.model_validate(parsed_data)
+                    print("Data validation successful! (from message content)")
+                    return AIResponse(
+                        provider="Gemini",
+                        content=workout_result.model_dump_json(),
+                        model=model,
+                        tokens_used=tokens_used if tokens_used else None
+                    )
+                elif action == "judge_response":
+                    judge_response = JudgeResponse.model_validate(parsed_data)
+                    print("Data validation successful! (from message content)")
+                    return AIResponse(
+                        provider="Gemini",
+                        content=judge_response.model_dump_json(),
+                        model=model,
+                        tokens_used=tokens_used if tokens_used else None
+                    )
+                
+            
+            error_content = str(response.candidates[0].content.parts)
             return AIResponse(
                 provider="Gemini",
-                content=workout_result.model_dump_json(),
+                content="",
                 model=model,
-                tokens_used=None
+                error=f"LLM did not call the required function. Response: {error_content}",
+                tokens_used=tokens_used
             )
         
         except Exception as e:
