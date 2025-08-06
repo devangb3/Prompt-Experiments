@@ -162,12 +162,12 @@ STRICT INSTRUCTIONS:
         PromptMessage(role="user", content="STRICT INSTRUCTIONS: Output ONLY a valid BrainWorkoutResult JSON object. Do NOT include any extra text or formatting. All fields must be present and filled. Your response will be parsed as JSON.\n" + json.dumps(dummy_ui_request))
     ]
     print("\nSending prompt to all providers...")
-    responses = await sender.send_to_provider(Provider.OPENAI, messages, action="generate_workout_result")
+    responses = await sender.send_to_provider(Provider.ANTHROPIC, messages, action="generate_workout_result")
     print_response(responses)
     
     print("\n Judging responses...")
     judge = JudgeService()
-    judged_responses = await judge.judge_response(Provider.OPENAI, responses, dummy_ui_request)
+    judged_responses = await judge.judge_response(Provider.ANTHROPIC, responses, dummy_ui_request)
     print_response(judged_responses)
     
     await sender.close()
