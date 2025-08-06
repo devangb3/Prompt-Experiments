@@ -23,14 +23,22 @@ class OpenAIService(BaseAIService):
         if tool == "generate_workout_result":
             openai_messages = []
             for msg in messages:
-                if msg.role == "user":
+                if msg.role == "system":
+                    enhanced_content = (
+                        msg.content + 
+                        "\n\nCRITICAL INSTRUCTIONS: You MUST use the 'save_brain_workout_result' function to return your analysis. "
+                        "Do NOT return JSON as plain text in your response. The ONLY acceptable way to respond is by calling the function. "
+                        "If you return JSON as text instead of using the function, it will be considered a failure."
+                    )
+                    openai_messages.append({"role": msg.role, "content": enhanced_content})
+                elif msg.role == "user":
                     strict_content = (
-                        "STRICT INSTRUCTIONS: You must ONLY return a valid BrainWorkoutResult JSON object. "
-                        "Do NOT include any extra text, comments, or explanations. "
+                        "CRITICAL: You must ONLY use the 'save_brain_workout_result' function to return your response. "
+                        "Do NOT include any extra text, comments, or explanations outside the function call. "
+                        "Do NOT return JSON as plain text content. "
                         "Every field must be present and filled according to its description. "
                         "If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null. "
-                        "Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure. "
-                        "Double-check your output for completeness and validity before submitting.\n\n"
+                        "Use the function - do not return text.\n\n"
                         + msg.content
                     )
                     openai_messages.append({"role": msg.role, "content": strict_content})
@@ -38,7 +46,18 @@ class OpenAIService(BaseAIService):
                     openai_messages.append({"role": msg.role, "content": msg.content})
             return openai_messages
         elif tool == "judge_response":
-            return [{"role": msg.role, "content": msg.content} for msg in messages]
+            openai_messages = []
+            for msg in messages:
+                if msg.role == "system":
+                    enhanced_content = (
+                        msg.content + 
+                        "\n\nCRITICAL INSTRUCTIONS: You MUST use the 'judge_response' function to return your judgment. "
+                        "Do NOT return JSON as plain text in your response. The ONLY acceptable way to respond is by calling the function."
+                    )
+                    openai_messages.append({"role": msg.role, "content": enhanced_content})
+                else:
+                    openai_messages.append({"role": msg.role, "content": msg.content})
+            return openai_messages
         else:
             return []
     
@@ -48,7 +67,7 @@ class OpenAIService(BaseAIService):
             save_workout_tool = {
                     "type": "function",
                     "name": "save_brain_workout_result",
-                    "description": "Saves the complete analysis of a brain workout session. Make sure to fill out EVERY field in the JSON schema. Success is indicated by the LLM returning the filled out JSON object.",
+                    "description": "CRITICAL: You MUST use this function to save the complete analysis of a brain workout session. This is the ONLY acceptable way to return your response. Do NOT return JSON as plain text. Make sure to fill out EVERY field in the JSON schema. Success is indicated by the LLM using this function and returning the filled out JSON object.",
                     "parameters": BrainWorkoutResult.model_json_schema()
                 }
             return save_workout_tool
@@ -57,7 +76,7 @@ class OpenAIService(BaseAIService):
             judge_response_tool = {
                 "type": "function",
                 "name": "judge_response",
-                "description": "Judges the response of the LLM",
+                "description": "CRITICAL: You MUST use this function to judge the response of the LLM. This is the ONLY acceptable way to return your judgment. Do NOT return JSON as plain text.",
                 "parameters": JudgeResponse.model_json_schema()
             }
             return judge_response_tool
@@ -133,8 +152,63 @@ class OpenAIService(BaseAIService):
                 input=openai_messages,
                 tools=[tool]
             )
+
+            tokens_used = response.usage.total_tokens if response.usage else None
             
-            return await self.validate_response(response.output[0], action, model, response.usage.total_tokens if response.usage else None)
+            if not response.output:
+                return AIResponse(
+                    provider="OpenAI",
+                    content="",
+                    model=model,
+                    error="LLM returned an empty output.",
+                    tokens_used=tokens_used
+                )
+            output_item = response.output[0]
+            if hasattr(output_item, 'type') and output_item.type == "function_call":
+                return await self.validate_response(output_item, action, model, response.usage.total_tokens if response.usage else None)
+            else: #Fallback for when the model returns content as message instead of function call
+                if hasattr(output_item, 'content') and output_item.content:
+                    content_text = ""
+                    for content_item in output_item.content:
+                        if hasattr(content_item, 'text'):
+                            content_text += content_item.text
+                    
+                    if content_text.strip():
+                        json_text = content_text.strip()
+                        if json_text.startswith('```json'):
+                            json_text = json_text.replace('```json', '').replace('```', '').strip()
+                        elif json_text.startswith('```'):
+                            json_text = json_text.replace('```', '').strip()
+                        
+                        parsed_data = json.loads(json_text)
+                        
+                        if action == "generate_workout_result":
+                            workout_result = BrainWorkoutResult.model_validate(parsed_data)
+                            print("Data validation successful! (from message content)")
+                            return AIResponse(
+                                provider="OpenAI",
+                                content=workout_result.model_dump_json(),
+                                model=model,
+                                tokens_used=tokens_used if tokens_used else None
+                            )
+                        elif action == "judge_response":
+                            judge_response = JudgeResponse.model_validate(parsed_data)
+                            print("Data validation successful! (from message content)")
+                            return AIResponse(
+                                provider="OpenAI",
+                                content=judge_response.model_dump_json(),
+                                model=model,
+                                tokens_used=tokens_used if tokens_used else None
+                            )
+
+                error_content = str(output_item)
+                return AIResponse(
+                    provider="OpenAI",
+                    content="",
+                    model=model,
+                    error=f"LLM did not call the required tool. Response: {error_content}",
+                    tokens_used=tokens_used
+                )
         
         except Exception as e:
             return AIResponse(
