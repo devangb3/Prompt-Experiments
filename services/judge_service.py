@@ -63,11 +63,11 @@ class JudgeService:
         ]
 
         if provider.value == 'openai':
-            return await self.send_to_provider(Provider.OPENAI, messages, action="judge_response")
-        elif provider.value == 'anthropic':
             return await self.send_to_provider(Provider.ANTHROPIC, messages, action="judge_response")
-        elif provider.value == 'gemini':
+        elif provider.value == 'anthropic':
             return await self.send_to_provider(Provider.GEMINI, messages, action="judge_response")
+        elif provider.value == 'gemini':
+            return await self.send_to_provider(Provider.OPENAI, messages, action="judge_response")
         else:
             return AIResponse(
                 provider="JudgeService",
