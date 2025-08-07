@@ -1,38 +1,39 @@
 """
-Migration utility for transferring data from MongoDB to Xano
+Database migration utility for moving data between MongoDB and Xano
 """
 
 import asyncio
-import os
-from typing import List, Dict, Any
 from datetime import datetime
-from dotenv import load_dotenv
+from typing import Dict, Any, List
 from .service import get_db_service
 from .xano_service import get_xano_db_service
 from .models import Conversation
-from .xano_models import XanoConversation
+from logging_config import get_logger
+
+logger = get_logger("database.migration")
 
 
 class DatabaseMigrationUtility:
-    """Utility for migrating conversations from MongoDB to Xano"""
+    """Utility for migrating conversations between database providers"""
     
     def __init__(self):
         self.mongo_service = get_db_service()
         self.xano_service = get_xano_db_service()
-        
+        logger.info("Database migration utility initialized")
+    
     async def migrate_all_conversations(self, batch_size: int = 100, dry_run: bool = False) -> Dict[str, Any]:
         """
         Migrate all conversations from MongoDB to Xano
         
         Args:
             batch_size: Number of conversations to process in each batch
-            dry_run: If True, only simulate the migration without actually transferring data
+            dry_run: If True, only simulate the migration without actually saving
         
         Returns:
             Dictionary with migration statistics
         """
-        print(f"Starting migration {'(DRY RUN)' if dry_run else ''}")
-        print("=" * 50)
+        logger.info(f"Starting migration {'(DRY RUN)' if dry_run else ''}")
+        logger.info("=" * 50)
         
         stats = {
             "total_processed": 0,
@@ -45,14 +46,14 @@ class DatabaseMigrationUtility:
         
         try:
             # Get all conversations from MongoDB
-            print("Fetching conversations from MongoDB...")
+            logger.info("Fetching conversations from MongoDB...")
             all_conversations = await self.mongo_service.get_all_conversations(limit=10000)  # Adjust as needed
             total_conversations = len(all_conversations)
             
-            print(f"Found {total_conversations} conversations to migrate")
+            logger.info(f"Found {total_conversations} conversations to migrate")
             
             if total_conversations == 0:
-                print("No conversations found in MongoDB")
+                logger.info("No conversations found in MongoDB")
                 return stats
             
             # Process in batches
@@ -61,7 +62,7 @@ class DatabaseMigrationUtility:
                 batch_num = (i // batch_size) + 1
                 total_batches = (total_conversations + batch_size - 1) // batch_size
                 
-                print(f"\nProcessing batch {batch_num}/{total_batches} ({len(batch)} conversations)")
+                logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} conversations)")
                 
                 for conversation in batch:
                     stats["total_processed"] += 1
@@ -71,46 +72,46 @@ class DatabaseMigrationUtility:
                             # Check if conversation already exists in Xano
                             existing = await self.xano_service.get_conversation(conversation.conversation_id)
                             if existing:
-                                print(f"  Skipping {conversation.conversation_id} (already exists in Xano)")
+                                logger.info(f"Skipping {conversation.conversation_id} (already exists in Xano)")
                                 continue
                             
                             # Convert and save to Xano
                             await self._migrate_single_conversation(conversation)
                         
                         stats["successful_migrations"] += 1
-                        print(f"  ✓ Migrated {conversation.conversation_id}")
+                        logger.info(f"✓ Migrated {conversation.conversation_id}")
                         
                     except Exception as e:
                         stats["failed_migrations"] += 1
                         error_msg = f"Failed to migrate {conversation.conversation_id}: {str(e)}"
                         stats["errors"].append(error_msg)
-                        print(f"  ✗ {error_msg}")
+                        logger.error(f"✗ {error_msg}")
                 
                 # Small delay between batches to avoid overwhelming the API
                 if not dry_run and batch_num < total_batches:
                     await asyncio.sleep(1)
         
         except Exception as e:
-            print(f"Migration failed with error: {e}")
+            logger.error(f"Migration failed with error: {e}")
             stats["errors"].append(f"Global error: {str(e)}")
         
         finally:
             stats["end_time"] = datetime.utcnow()
             duration = (stats["end_time"] - stats["start_time"]).total_seconds()
             
-            print("\n" + "=" * 50)
-            print("Migration Summary:")
-            print(f"Total processed: {stats['total_processed']}")
-            print(f"Successful: {stats['successful_migrations']}")
-            print(f"Failed: {stats['failed_migrations']}")
-            print(f"Duration: {duration:.2f} seconds")
+            logger.info("=" * 50)
+            logger.info("Migration Summary:")
+            logger.info(f"Total processed: {stats['total_processed']}")
+            logger.info(f"Successful: {stats['successful_migrations']}")
+            logger.info(f"Failed: {stats['failed_migrations']}")
+            logger.info(f"Duration: {duration:.2f} seconds")
             
             if stats["errors"]:
-                print(f"\nErrors ({len(stats['errors'])}):")
+                logger.warning(f"Errors ({len(stats['errors'])}):")
                 for error in stats["errors"][:10]:  # Show first 10 errors
-                    print(f"  - {error}")
+                    logger.warning(f"  - {error}")
                 if len(stats["errors"]) > 10:
-                    print(f"  ... and {len(stats['errors']) - 10} more errors")
+                    logger.warning(f"  ... and {len(stats['errors']) - 10} more errors")
         
         return stats
     
@@ -136,33 +137,26 @@ class DatabaseMigrationUtility:
             for resp in mongo_conversation.responses
         ]
         
-        # Calculate response times (if available)
-        response_times = {}
-        for resp in mongo_conversation.responses:
-            if resp.response_time_ms:
-                response_times[resp.provider] = resp.response_time_ms / 1000
-        
         # Save to Xano
         await self.xano_service.save_conversation(
             messages=messages,
             responses=responses,
             conversation_id=mongo_conversation.conversation_id,
-            metadata=mongo_conversation.metadata,
-            response_times=response_times if response_times else None
+            metadata=mongo_conversation.metadata
         )
     
     async def verify_migration(self, sample_size: int = 10) -> Dict[str, Any]:
         """
-        Verify migration by comparing a sample of conversations between MongoDB and Xano
+        Verify that migrated conversations match the original data
         
         Args:
             sample_size: Number of conversations to verify
         
         Returns:
-            Dictionary with verification results
+            Dictionary with verification statistics
         """
-        print("Verifying migration...")
-        print("=" * 30)
+        logger.info("Verifying migration...")
+        logger.info("=" * 30)
         
         verification_stats = {
             "checked": 0,
@@ -173,92 +167,74 @@ class DatabaseMigrationUtility:
         }
         
         try:
-            # Get sample conversations from MongoDB
+            # Get a sample of conversations from MongoDB
             mongo_conversations = await self.mongo_service.get_all_conversations(limit=sample_size)
             
             for conv in mongo_conversations:
                 verification_stats["checked"] += 1
                 
                 try:
-                    # Get corresponding conversation from Xano
+                    # Get the same conversation from Xano
                     xano_conv = await self.xano_service.get_conversation(conv.conversation_id)
                     
                     if not xano_conv:
                         verification_stats["missing_in_xano"] += 1
-                        print(f"  ✗ {conv.conversation_id} missing in Xano")
+                        logger.error(f"✗ {conv.conversation_id} missing in Xano")
                         continue
                     
-                    # Compare basic properties
                     if (conv.conversation_id == xano_conv.conversation_id and
+                        conv.system_prompt == xano_conv.system_prompt and
                         len(conv.messages) == len(xano_conv.messages) and
                         len(conv.responses) == len(xano_conv.responses)):
+                        
                         verification_stats["matches"] += 1
-                        print(f"  ✓ {conv.conversation_id} matches")
+                        logger.info(f"{conv.conversation_id} matches")
                     else:
                         verification_stats["mismatches"] += 1
-                        print(f"  ✗ {conv.conversation_id} mismatch")
+                        logger.warning(f"{conv.conversation_id} mismatch")
                 
                 except Exception as e:
                     error_msg = f"Error verifying {conv.conversation_id}: {str(e)}"
                     verification_stats["errors"].append(error_msg)
-                    print(f"  ✗ {error_msg}")
+                    logger.error(f"{error_msg}")
         
         except Exception as e:
-            print(f"Verification failed: {e}")
-            verification_stats["errors"].append(f"Global verification error: {str(e)}")
+            logger.error(f"Verification failed: {e}")
+            verification_stats["errors"].append(f"Global error: {str(e)}")
         
-        print("\nVerification Summary:")
-        print(f"Checked: {verification_stats['checked']}")
-        print(f"Matches: {verification_stats['matches']}")
-        print(f"Mismatches: {verification_stats['mismatches']}")
-        print(f"Missing in Xano: {verification_stats['missing_in_xano']}")
+        logger.info("Verification Summary:")
+        logger.info(f"Checked: {verification_stats['checked']}")
+        logger.info(f"Matches: {verification_stats['matches']}")
+        logger.info(f"Mismatches: {verification_stats['mismatches']}")
+        logger.info(f"Missing in Xano: {verification_stats['missing_in_xano']}")
         
         return verification_stats
 
 
 async def main():
-    """Main function for running migration"""
-    import argparse
+    """Main function for running migrations"""
+    import os
     
-    # Load environment variables first
-    load_dotenv()
-    
-    parser = argparse.ArgumentParser(description="Migrate conversations from MongoDB to Xano")
-    parser.add_argument("--dry-run", action="store_true", help="Simulate migration without transferring data")
-    parser.add_argument("--batch-size", type=int, default=100, help="Number of conversations per batch")
-    parser.add_argument("--verify-only", action="store_true", help="Only verify existing migration")
-    parser.add_argument("--verify-sample-size", type=int, default=10, help="Number of conversations to verify")
-    
-    args = parser.parse_args()
-
+    # Check required environment variables
     if not os.getenv('XANO_BASE_URL'):
-        print("Error: XANO_BASE_URL environment variable must be set")
-
+        logger.error("Error: XANO_BASE_URL environment variable must be set")
         return
-    if not os.getenv('XANO_API_TOKEN'):
-        print("Warning: XANO_API_TOKEN not set - using public endpoints")
     
+    if not os.getenv('XANO_API_TOKEN'):
+        logger.warning("Warning: XANO_API_TOKEN not set - using public endpoints")
+    
+    # Create migration utility
     migration_utility = DatabaseMigrationUtility()
     
-    try:
-        if args.verify_only:
-            await migration_utility.verify_migration(sample_size=args.verify_sample_size)
-        else:
-            # Run migration
-            stats = await migration_utility.migrate_all_conversations(
-                batch_size=args.batch_size,
-                dry_run=args.dry_run
-            )
-            
-            # If migration was successful and not a dry run, verify a sample
-            if not args.dry_run and stats["successful_migrations"] > 0:
-                print("\nRunning verification...")
-                await migration_utility.verify_migration(sample_size=min(10, stats["successful_migrations"]))
+    # Run migration
+    logger.info("Starting MongoDB to Xano migration...")
+    stats = await migration_utility.migrate_all_conversations(batch_size=50, dry_run=False)
     
-    finally:
-        # Close connections
-        from .connection import close_database
-        await close_database()
+    # Run verification
+    logger.info("Running verification...")
+    verification_stats = await migration_utility.verify_migration(sample_size=5)
+    
+    logger.info("Migration completed!")
 
 
 if __name__ == "__main__":

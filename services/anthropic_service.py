@@ -1,7 +1,8 @@
 """
-Anthropic service implementation
+Anthropic service for AI interactions
 """
 
+import json
 from typing import List, Optional
 import anthropic
 import json
@@ -9,15 +10,17 @@ from models.BrainWorkoutResult import BrainWorkoutResult
 from models.JudgeResponse import JudgeResponse
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
+from logging_config import get_logger
+
+logger = get_logger("services.anthropic")
 
 
 class AnthropicService(BaseAIService):
-    """Anthropic Claude API service"""
     
     def _setup_client(self):
         """Setup Anthropic client"""
-        if self.api_key:
-            self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.client = anthropic.Anthropic(api_key=self.api_key)
+        logger.debug("Anthropic client initialized")
     
     async def get_messages(self, tool: str, messages: List[PromptMessage]) -> List[dict]:
         """Get messages for the given tool"""
@@ -116,11 +119,11 @@ class AnthropicService(BaseAIService):
     async def validate_response(self, tool_call, action: str, model: str, tokens_used: Optional[int] = None) -> AIResponse:
         """Validate the response of the LLM"""
         if action == "generate_workout_result":
-            print("LLM responded with the correct tool. Validating data...")
+            logger.debug("LLM responded with the correct tool. Validating data...")
             tool_args = tool_call.input
             try:
                 workout_result = BrainWorkoutResult.model_validate(tool_args)
-                print("Data validation successful!")
+                logger.debug("Data validation successful!")
                 return AIResponse(
                     provider="Anthropic",
                     content=workout_result.model_dump_json(),
@@ -128,8 +131,8 @@ class AnthropicService(BaseAIService):
                     tokens_used=tokens_used if tokens_used else None
                 )
             except Exception as e:
-                print(f"Validation error for BrainWorkoutResult: {e}")
-                print(f"Tool args received: {tool_args}")
+                logger.error(f"Validation error for BrainWorkoutResult: {e}")
+                logger.debug(f"Tool args received: {tool_args}")
                 return AIResponse(
                     provider="Anthropic",
                     content="",
@@ -137,12 +140,12 @@ class AnthropicService(BaseAIService):
                     error=str(e)
                 )
         elif action == "judge_response":
-            print("LLM responded with the correct tool. Validating data...")
+            logger.debug("LLM responded with the correct tool. Validating data...")
             tool_args = tool_call.input
             
             try:
                 judge_response = JudgeResponse.model_validate(tool_args)
-                print("Data validation successful!")
+                logger.debug("Data validation successful!")
                 return AIResponse(
                     provider="Anthropic",
                     content=judge_response.model_dump_json(),
@@ -150,7 +153,7 @@ class AnthropicService(BaseAIService):
                     tokens_used=tokens_used if tokens_used else None
                 )
             except Exception as e:
-                print(f"Direct validation failed: {e}")
+                logger.error(f"Direct validation failed: {e}")
                 
                 # Try to fix malformed XML-like parameters
                 try:
@@ -171,9 +174,9 @@ class AnthropicService(BaseAIService):
                         else:
                             fixed_args[field_name] = field_value
                     
-                    print(f"Attempting validation with fixed args: {fixed_args}")
+                    logger.debug(f"Attempting validation with fixed args: {fixed_args}")
                     judge_response = JudgeResponse.model_validate(fixed_args)
-                    print("Data validation successful after fixing malformed data!")
+                    logger.debug("Data validation successful after fixing malformed data!")
                     return AIResponse(
                         provider="Anthropic",
                         content=judge_response.model_dump_json(),
@@ -181,7 +184,7 @@ class AnthropicService(BaseAIService):
                         tokens_used=tokens_used if tokens_used else None
                     )
                 except Exception as fix_error:
-                    print(f"Failed to fix malformed data: {fix_error}")
+                    logger.error(f"Failed to fix malformed data: {fix_error}")
                     return AIResponse(
                         provider="Anthropic",
                         content="",

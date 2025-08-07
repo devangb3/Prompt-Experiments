@@ -1,23 +1,24 @@
 """
-Xano database service for integrating with AI services
-Provides the same interface as DatabaseService but uses Xano REST API
+Xano database service for conversation storage
 """
 
 import uuid
-import time
-from datetime import datetime
 from typing import List, Optional, Dict, Any
-from .xano_client import get_xano_client, close_xano_client, XanoAPIError
-from .xano_models import XanoConversation, XanoPromptMessageModel, XanoAIResponseModel
-from .models import Conversation, PromptMessageModel, AIResponseModel
+from datetime import datetime
+from .xano_models import XanoPromptMessageModel, XanoAIResponseModel
+from .xano_client import XanoClient, get_xano_client
+from .models import Conversation
 from services.types import PromptMessage, AIResponse
+from logging_config import get_logger
+
+logger = get_logger("database.xano_service")
 
 
 class XanoDatabaseService:
-    """Service for managing conversations using Xano API"""
+    """Service class for Xano database operations"""
     
     def __init__(self):
-        self.client = None
+        self.client: Optional[XanoClient] = None
         self._initialized = False
     
     async def initialize(self):
@@ -25,13 +26,14 @@ class XanoDatabaseService:
         if not self._initialized:
             self.client = await get_xano_client()
             self._initialized = True
+            logger.debug("Xano database service initialized")
     
     def _convert_prompt_messages(self, messages: List[PromptMessage]) -> List[XanoPromptMessageModel]:
-        """Convert service PromptMessage to Xano PromptMessageModel"""
+        """Convert PromptMessage objects to XanoPromptMessageModel objects"""
         return [XanoPromptMessageModel(role=msg.role, content=msg.content) for msg in messages]
     
     def _convert_ai_responses(self, responses: List[AIResponse], response_times: Optional[Dict[str, float]] = None) -> List[XanoAIResponseModel]:
-        """Convert service AIResponse to Xano AIResponseModel"""
+        """Convert AIResponse objects to XanoAIResponseModel objects"""
         xano_responses = []
         for response in responses:
             response_time = response_times.get(response.provider) if response_times else None
@@ -47,40 +49,44 @@ class XanoDatabaseService:
         return xano_responses
     
     def _xano_to_mongo_conversation(self, xano_data: Dict) -> Conversation:
-        """Convert Xano API response to MongoDB-compatible Conversation model"""
-        # Convert Xano response to MongoDB Conversation format for compatibility
-        
+        """Convert Xano conversation data to MongoDB-compatible Conversation object"""
         def parse_timestamp(timestamp) -> datetime:
-            """Convert timestamp from Xano to datetime"""
-            if timestamp is None:
-                return datetime.utcnow()
-            if isinstance(timestamp, int):
-                return datetime.fromtimestamp(timestamp / 1000)
             if isinstance(timestamp, str):
                 return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            return datetime.utcnow()
+            return datetime.fromtimestamp(timestamp)
+        
+        # Convert Xano response format to MongoDB format
+        mongo_responses = []
+        for xano_response in xano_data.get('responses', []):
+            mongo_response = {
+                'provider': xano_response.get('provider'),
+                'content': xano_response.get('content'),
+                'model': xano_response.get('model'),
+                'tokens_used': xano_response.get('tokens_used'),
+                'error': xano_response.get('error'),
+                'response_time_ms': xano_response.get('response_time_ms'),
+                'created_at': parse_timestamp(xano_response.get('created_at', datetime.now()))
+            }
+            mongo_responses.append(mongo_response)
+        
+        # Convert Xano message format to MongoDB format
+        mongo_messages = []
+        for xano_message in xano_data.get('messages', []):
+            mongo_message = {
+                'role': xano_message.get('role'),
+                'content': xano_message.get('content'),
+                'created_at': parse_timestamp(xano_message.get('created_at', datetime.now()))
+            }
+            mongo_messages.append(mongo_message)
         
         return Conversation(
-            conversation_id=xano_data['conversation_id'],
+            conversation_id=xano_data.get('conversation_id'),
             system_prompt=xano_data.get('system_prompt'),
-            messages=[
-                PromptMessageModel(role=msg['role'], content=msg['content'])
-                for msg in xano_data.get('messages', [])
-            ],
-            responses=[
-                AIResponseModel(
-                    provider=resp['provider'],
-                    content=resp['content'],
-                    model=resp['model'],
-                    tokens_used=resp.get('tokens_used'),
-                    error=resp.get('error'),
-                    response_time_ms=resp.get('response_time_ms')
-                )
-                for resp in xano_data.get('responses', [])
-            ],
-            created_at=parse_timestamp(xano_data.get('created_at')),
-            updated_at=parse_timestamp(xano_data.get('updated_at')),
-            metadata=xano_data.get('metadata', {})
+            messages=mongo_messages,
+            responses=mongo_responses,
+            metadata=xano_data.get('metadata', {}),
+            created_at=parse_timestamp(xano_data.get('created_at', datetime.now())),
+            updated_at=parse_timestamp(xano_data.get('updated_at', datetime.now()))
         )
     
     async def save_conversation(
@@ -106,25 +112,24 @@ class XanoDatabaseService:
             else:
                 user_messages.append(msg)
         
-        # Prepare data for Xano API
         conversation_data = {
             "conversation_id": conversation_id,
             "system_prompt": system_prompt,
-            "messages": [msg.model_dump() for msg in self._convert_prompt_messages(messages)],
-            "responses": [resp.model_dump() for resp in self._convert_ai_responses(responses, response_times)],
+            "messages": self._convert_prompt_messages(messages),
+            "responses": self._convert_ai_responses(responses, response_times),
             "metadata": metadata or {}
         }
         
         try:
             # Save to Xano
             saved_data = await self.client.create_conversation(conversation_data)
-            print(f"Saved conversation {conversation_id} to Xano")
+            logger.info(f"Saved conversation {conversation_id} to Xano")
             
             # Convert back to MongoDB-compatible format for return value
             return self._xano_to_mongo_conversation(saved_data)
             
-        except XanoAPIError as e:
-            print(f"Failed to save conversation to Xano: {e}")
+        except Exception as e:
+            logger.error(f"Failed to save conversation to Xano: {e}")
             raise
     
     async def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
@@ -134,10 +139,12 @@ class XanoDatabaseService:
         try:
             xano_data = await self.client.get_conversation(conversation_id)
             if xano_data:
+                logger.debug(f"Retrieved conversation from Xano: {conversation_id}")
                 return self._xano_to_mongo_conversation(xano_data)
+            logger.warning(f"Conversation not found in Xano: {conversation_id}")
             return None
-        except XanoAPIError as e:
-            print(f"Failed to get conversation from Xano: {e}")
+        except Exception as e:
+            logger.error(f"Failed to get conversation from Xano: {e}")
             return None
     
     async def get_all_conversations(self, limit: int = 100, skip: int = 0) -> List[Conversation]:
@@ -146,9 +153,11 @@ class XanoDatabaseService:
         
         try:
             xano_conversations = await self.client.get_conversations(limit=limit, offset=skip)
-            return [self._xano_to_mongo_conversation(conv) for conv in xano_conversations]
-        except XanoAPIError as e:
-            print(f"Failed to get conversations from Xano: {e}")
+            conversations = [self._xano_to_mongo_conversation(conv) for conv in xano_conversations]
+            logger.debug(f"Retrieved {len(conversations)} conversations from Xano")
+            return conversations
+        except Exception as e:
+            logger.error(f"Failed to get conversations from Xano: {e}")
             return []
     
     async def get_conversations_by_provider(self, provider: str, limit: int = 100) -> List[Conversation]:
@@ -164,9 +173,10 @@ class XanoDatabaseService:
                         filtered_conversations.append(conv)
                         break
             
+            logger.debug(f"Found {len(filtered_conversations)} conversations for provider: {provider}")
             return filtered_conversations[:limit]
         except Exception as e:
-            print(f"Failed to get conversations by provider from Xano: {e}")
+            logger.error(f"Failed to get conversations by provider from Xano: {e}")
             return []
     
     async def delete_conversation(self, conversation_id: str) -> bool:
@@ -174,9 +184,14 @@ class XanoDatabaseService:
         await self.initialize()
         
         try:
-            return await self.client.delete_conversation(conversation_id)
-        except XanoAPIError as e:
-            print(f"Failed to delete conversation from Xano: {e}")
+            success = await self.client.delete_conversation(conversation_id)
+            if success:
+                logger.info(f"Deleted conversation from Xano: {conversation_id}")
+            else:
+                logger.warning(f"Failed to delete conversation from Xano: {conversation_id}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to delete conversation from Xano: {e}")
             return False
     
     async def get_statistics(self) -> Dict[str, Any]:
@@ -187,7 +202,6 @@ class XanoDatabaseService:
             conversations = await self.get_all_conversations(limit=1000)  # Sample size
             total_conversations = len(conversations)
             
-            # Count responses and providers
             total_responses = 0
             provider_stats = {}
             
@@ -197,13 +211,15 @@ class XanoDatabaseService:
                     provider = response.provider
                     provider_stats[provider] = provider_stats.get(provider, 0) + 1
             
-            return {
+            stats = {
                 "total_conversations": total_conversations,
                 "total_responses": total_responses,
                 "provider_stats": provider_stats
             }
+            logger.debug(f"Retrieved statistics from Xano: {stats}")
+            return stats
         except Exception as e:
-            print(f"Failed to get statistics from Xano: {e}")
+            logger.error(f"Failed to get statistics from Xano: {e}")
             return {"total_conversations": 0, "total_responses": 0, "provider_stats": {}}
     
     async def search_conversations(self, query: str, limit: int = 50) -> List[Conversation]:
@@ -214,26 +230,29 @@ class XanoDatabaseService:
             all_conversations = await self.get_all_conversations(limit=limit * 2)  # Get more to filter
             matching_conversations = []
             
-            query_lower = query.lower()
-            
             for conv in all_conversations:
-                if conv.system_prompt and query_lower in conv.system_prompt.lower():
-                    matching_conversations.append(conv)
-                    continue
-                
-                for message in conv.messages:
-                    if query_lower in message.content.lower():
+                # Search in messages
+                for msg in conv.messages:
+                    if query.lower() in msg.content.lower():
                         matching_conversations.append(conv)
                         break
-                else:
-                    for response in conv.responses:
-                        if query_lower in response.content.lower():
+                
+                # Search in responses
+                for response in conv.responses:
+                    if query.lower() in response.content.lower():
+                        if conv not in matching_conversations:
                             matching_conversations.append(conv)
-                            break
+                        break
+                
+                # Search in system prompt
+                if conv.system_prompt and query.lower() in conv.system_prompt.lower():
+                    if conv not in matching_conversations:
+                        matching_conversations.append(conv)
             
+            logger.debug(f"Found {len(matching_conversations)} conversations matching query: {query}")
             return matching_conversations[:limit]
         except Exception as e:
-            print(f"Failed to search conversations in Xano: {e}")
+            logger.error(f"Failed to search conversations in Xano: {e}")
             return []
 
 
@@ -244,9 +263,12 @@ def get_xano_db_service() -> XanoDatabaseService:
     global _xano_db_service
     if _xano_db_service is None:
         _xano_db_service = XanoDatabaseService()
+        logger.debug("Created new Xano database service instance")
     return _xano_db_service
-
 
 async def close_xano_db_service():
     """Close the Xano database service"""
-    await close_xano_client() 
+    global _xano_db_service
+    if _xano_db_service and _xano_db_service.client:
+        await _xano_db_service.client.close()
+        logger.info("Xano database service closed") 

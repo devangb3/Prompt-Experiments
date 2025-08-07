@@ -3,13 +3,11 @@ Database connection management for MongoDB and Xano
 """
 
 import os
-import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
+from logging_config import get_logger
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger("database.connection")
 
 # Global database client for MongoDB
 _client: Optional[AsyncIOMotorClient] = None
@@ -24,11 +22,11 @@ class DatabaseConnection:
         """Get the configured database provider from environment"""
         provider = os.getenv('DATABASE_PROVIDER', 'mongodb').lower()
         logger.info(f"Database provider configured as: {provider}")
-        logger.info(f"DATABASE_PROVIDER environment variable: {'is set' if 'DATABASE_PROVIDER' in os.environ else 'is NOT set'}")
+        logger.debug(f"DATABASE_PROVIDER environment variable: {'is set' if 'DATABASE_PROVIDER' in os.environ else 'is NOT set'}")
         if 'DATABASE_PROVIDER' in os.environ:
-            logger.info(f"Actual DATABASE_PROVIDER value: {os.environ['DATABASE_PROVIDER']}")
+            logger.debug(f"Actual DATABASE_PROVIDER value: {os.environ['DATABASE_PROVIDER']}")
         else:
-            logger.info("Using default provider: mongodb")
+            logger.debug("Using default provider: mongodb")
         return provider
 
     @staticmethod
@@ -58,7 +56,7 @@ async def get_database():
         database_name = os.getenv('MONGO_DATABASE', 'ai_prompt_sender')
         
         logger.info(f"Connecting to MongoDB database: {database_name}")
-        logger.info(f"Using MongoDB URI: {mongo_uri}")
+        logger.debug(f"Using MongoDB URI: {mongo_uri}")
         
         _client = AsyncIOMotorClient(mongo_uri)
         _database = _client[database_name]
@@ -79,12 +77,12 @@ async def close_database():
     
     if _client:
         _client.close()
-        print("MongoDB connection closed")
+        logger.info("MongoDB connection closed")
         _client = None
     
     from .xano_client import close_xano_client
     await close_xano_client()
-    print("Database connections closed")
+    logger.info("Database connections closed")
 
 
 def get_collection(collection_name: str):
@@ -100,7 +98,7 @@ def get_collection(collection_name: str):
 def get_connection_info() -> dict:
     """Get information about the current database configuration"""
     provider = DatabaseConnection.get_provider_type()
-    logger.info(f"Getting connection info for provider: {provider}")
+    logger.debug(f"Getting connection info for provider: {provider}")
     
     if provider == "mongodb":
         info = {
@@ -119,5 +117,5 @@ def get_connection_info() -> dict:
             "timeout": os.getenv('XANO_TIMEOUT', '30.0')
         }
     
-    logger.info(f"Connection info: {info}")
+    logger.debug(f"Connection info: {info}")
     return info 

@@ -1,5 +1,5 @@
 """
-Perplexity service implementation
+Perplexity service for AI interactions
 """
 
 from typing import List
@@ -7,6 +7,9 @@ from openai import OpenAI
 from models.BrainWorkoutResult import BrainWorkoutResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
+from logging_config import get_logger
+
+logger = get_logger("services.perplexity")
 
 
 class PerplexityService(BaseAIService):
@@ -14,11 +17,11 @@ class PerplexityService(BaseAIService):
     
     def _setup_client(self):
         """Setup Perplexity client"""
-        if self.api_key:
-            self.client = OpenAI(
-                api_key=self.api_key,
-                base_url="https://api.perplexity.ai"
-            )
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url="https://api.perplexity.ai"
+        )
+        logger.debug("Perplexity client initialized")
     
     async def send_prompt(self, messages: List[PromptMessage], model: str = "sonar") -> AIResponse:
         """Send prompt to Perplexity"""
@@ -41,8 +44,11 @@ class PerplexityService(BaseAIService):
                     "json_schema": {"schema": BrainWorkoutResult.model_json_schema()},
                 },
             )
-            print("Response: ", response.choices[0].message.content)
-            brain_workout_result = BrainWorkoutResult.model_validate_json(response.choices[0].message.content)
+            
+            response_content = response.choices[0].message.content
+            logger.debug(f"Perplexity response: {response_content}")
+            
+            brain_workout_result = BrainWorkoutResult.model_validate_json(response_content)
             return AIResponse(
                 provider="Perplexity",
                 content=brain_workout_result.model_dump_json(),
@@ -51,6 +57,7 @@ class PerplexityService(BaseAIService):
             )
         
         except Exception as e:
+            logger.error(f"Error in Perplexity service: {e}")
             return AIResponse(
                 provider="Perplexity",
                 content="",

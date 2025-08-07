@@ -1,25 +1,24 @@
 """
-Database service for integrating with AI services
+Database service for MongoDB operations
 """
 
 import uuid
-import time
-from datetime import datetime
 from typing import List, Optional, Dict, Any
-from .connection import get_database, get_collection
 from .models import Conversation, PromptMessageModel, AIResponseModel, ConversationRepository
 from services.types import PromptMessage, AIResponse
+from logging_config import get_logger
+from .connection import get_database, get_collection
+logger = get_logger("database.service")
 
 
 class DatabaseService:
-    """Service for managing conversations in the database"""
+    """Service class for database operations"""
     
     def __init__(self):
         self.repository = None
         self._initialized = False
     
     async def initialize(self):
-        """Initialize the database connection and repository"""
         if not self._initialized:
             await get_database()
             collection = get_collection("conversations")
@@ -27,11 +26,11 @@ class DatabaseService:
             self._initialized = True
     
     def _convert_prompt_messages(self, messages: List[PromptMessage]) -> List[PromptMessageModel]:
-        """Convert service PromptMessage to database PromptMessageModel"""
+        """Convert PromptMessage objects to PromptMessageModel objects"""
         return [PromptMessageModel(role=msg.role, content=msg.content) for msg in messages]
     
     def _convert_ai_responses(self, responses: List[AIResponse], response_times: Optional[Dict[str, float]] = None) -> List[AIResponseModel]:
-        """Convert service AIResponse to database AIResponseModel"""
+        """Convert AIResponse objects to AIResponseModel objects"""
         db_responses = []
         for response in responses:
             response_time = response_times.get(response.provider) if response_times else None
@@ -79,33 +78,49 @@ class DatabaseService:
         
         # Save to database
         saved_conversation = await self.repository.create(conversation)
-        print(f"Saved conversation {conversation_id} to database")
+        logger.info(f"Saved conversation {conversation_id} to database")
         return saved_conversation
     
     async def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
         """Retrieve a conversation by ID"""
         await self.initialize()
-        return await self.repository.find_by_id(conversation_id)
+        conversation = await self.repository.find_by_id(conversation_id)
+        if conversation:
+            logger.debug(f"Retrieved conversation: {conversation_id}")
+        else:
+            logger.warning(f"Conversation not found: {conversation_id}")
+        return conversation
     
     async def get_all_conversations(self, limit: int = 100, skip: int = 0) -> List[Conversation]:
         """Get all conversations with pagination"""
         await self.initialize()
-        return await self.repository.find_all(limit=limit, skip=skip)
+        conversations = await self.repository.find_all(limit=limit, skip=skip)
+        logger.debug(f"Retrieved {len(conversations)} conversations")
+        return conversations
     
     async def get_conversations_by_provider(self, provider: str, limit: int = 100) -> List[Conversation]:
         """Get conversations by AI provider"""
         await self.initialize()
-        return await self.repository.find_by_provider(provider, limit=limit)
+        conversations = await self.repository.find_by_provider(provider, limit=limit)
+        logger.debug(f"Retrieved {len(conversations)} conversations for provider: {provider}")
+        return conversations
     
     async def delete_conversation(self, conversation_id: str) -> bool:
         """Delete a conversation"""
         await self.initialize()
-        return await self.repository.delete(conversation_id)
+        success = await self.repository.delete(conversation_id)
+        if success:
+            logger.info(f"Deleted conversation: {conversation_id}")
+        else:
+            logger.warning(f"Failed to delete conversation: {conversation_id}")
+        return success
     
     async def get_statistics(self) -> Dict[str, Any]:
         """Get database statistics"""
         await self.initialize()
-        return await self.repository.get_statistics()
+        stats = await self.repository.get_statistics()
+        logger.debug(f"Retrieved database statistics: {stats}")
+        return stats
     
     async def search_conversations(self, query: str, limit: int = 50) -> List[Conversation]:
         """Search conversations by content"""
@@ -123,6 +138,8 @@ class DatabaseService:
         conversations = []
         async for doc in cursor:
             conversations.append(Conversation(**doc))
+        
+        logger.debug(f"Found {len(conversations)} conversations matching query: {query}")
         return conversations
 
 
@@ -133,4 +150,5 @@ def get_db_service() -> DatabaseService:
     global _db_service
     if _db_service is None:
         _db_service = DatabaseService()
+        logger.debug("Created new database service instance")
     return _db_service 

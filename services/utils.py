@@ -3,21 +3,24 @@ Utility functions for AI services
 """
 
 from .types import AIResponse
+from logging_config import get_logger
+
+logger = get_logger("services.utils")
 
 
 def print_response(response: AIResponse):
     """Pretty print an AI response"""
-    print(f"\n{'='*50}")
-    print(f"Provider: {response.provider}")
-    print(f"Model: {response.model}")
+    logger.info("=" * 50)
+    logger.info(f"Provider: {response.provider}")
+    logger.info(f"Model: {response.model}")
     if response.tokens_used:
-        print(f"Tokens Used: {response.tokens_used}")
+        logger.info(f"Tokens Used: {response.tokens_used}")
     if response.error:
-        print(f"Error: {response.error}")
+        logger.error(f"Error: {response.error}")
     else:
-        print(f"Response:")
-        print(response.content)
-    print(f"{'='*50}")
+        logger.info("Response:")
+        logger.info(response.content)
+    logger.info("=" * 50)
 
 
 def print_responses(responses: list[AIResponse]):

@@ -1,7 +1,8 @@
 """
-Google Gemini service implementation
+Gemini service for AI interactions
 """
 
+import json
 from typing import List, Optional
 from google import genai
 from google.genai import types
@@ -10,15 +11,13 @@ from models.BrainWorkoutResult import BrainWorkoutResult
 from models.JudgeResponse import JudgeResponse
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
-import json
+from logging_config import get_logger
+
+logger = get_logger("services.gemini")
 
 
 def get_flattened_schema(cls: BaseModel):
-    """
-    Converts a Pydantic model to a flattened JSON schema dictionary
-    by resolving all $ref references inline. This is required for 
-    Google Gemini API function calling which doesn't support $ref.
-    """
+    """Get a flattened schema for Gemini function declarations"""
     schema = cls.model_json_schema()
     if "$defs" not in schema:
         return schema
@@ -68,9 +67,7 @@ def get_flattened_schema(cls: BaseModel):
     return schema
 
 
-class GeminiService(BaseAIService):
-    """Google Gemini API service"""
-    
+class GeminiService(BaseAIService):    
     def _setup_client(self):
         """Setup Gemini client"""
         if self.api_key:
@@ -197,13 +194,13 @@ class GeminiService(BaseAIService):
     async def validate_response(self, function_call, action: str, model: str, tokens_used: Optional[int] = None) -> AIResponse:
         """Validate the response of the LLM"""
         if action == "generate_workout_result":
-            print("LLM responded with the correct function. Validating data...")
+            logger.debug("LLM responded with the correct function. Validating data...")
             tool_args = function_call.args
-            print(f"Tool args received: {tool_args}")
+            logger.debug(f"Tool args received: {tool_args}")
                        
             try:
                 workout_result = BrainWorkoutResult.model_validate(tool_args)
-                print("Data validation successful!")
+                logger.debug("Data validation successful!")
                 return AIResponse(
                     provider="Gemini",
                     content=workout_result.model_dump_json(),
@@ -211,7 +208,7 @@ class GeminiService(BaseAIService):
                     tokens_used=tokens_used if tokens_used else None
                 )
             except Exception as e:
-                print(f"Validation error for BrainWorkoutResult: {e}")
+                logger.error(f"Validation error for BrainWorkoutResult: {e}")
                 return AIResponse(
                     provider="Gemini",
                     content="",
@@ -219,12 +216,12 @@ class GeminiService(BaseAIService):
                     error=f"Validation failed: {e}"
                 )
         elif action == "judge_response":
-            print("LLM responded with the correct function. Validating data...")
+            logger.debug("LLM responded with the correct function. Validating data...")
             tool_args = function_call.args
                         
             try:
                 judge_response = JudgeResponse.model_validate(tool_args)
-                print("Data validation successful!")
+                logger.debug("Data validation successful!")
                 return AIResponse(
                     provider="Gemini",
                     content=judge_response.model_dump_json(),
@@ -232,7 +229,7 @@ class GeminiService(BaseAIService):
                     tokens_used=tokens_used if tokens_used else None
                 )
             except Exception as e:
-                print(f"Direct validation failed: {e}")
+                logger.error(f"Direct validation failed: {e}")
                 return AIResponse(
                     provider="Gemini",
                     content="",
@@ -293,7 +290,7 @@ class GeminiService(BaseAIService):
                     provider="Gemini",
                     content="",
                     model=model,
-                    error="LLM returned an empty response.",
+                    error="LLM returned an empty response",
                     tokens_used=tokens_used
                 )
             
@@ -326,43 +323,49 @@ class GeminiService(BaseAIService):
                 elif json_text.startswith('```'):
                     json_text = json_text.replace('```', '').strip()
                 
-                
-                parsed_data = json.loads(json_text)
-                
-                if action == "generate_workout_result":
-                    workout_result = BrainWorkoutResult.model_validate(parsed_data)
-                    print("Data validation successful! (from message content)")
+                try:
+                    parsed_data = json.loads(json_text)
+                    
+                    if action == "generate_workout_result":
+                        workout_result = BrainWorkoutResult.model_validate(parsed_data)
+                        logger.debug("Data validation successful! (from message content)")
+                        return AIResponse(
+                            provider="Gemini",
+                            content=workout_result.model_dump_json(),
+                            model=model,
+                            tokens_used=tokens_used
+                        )
+                    elif action == "judge_response":
+                        judge_response = JudgeResponse.model_validate(parsed_data)
+                        logger.debug("Data validation successful! (from message content)")
+                        return AIResponse(
+                            provider="Gemini",
+                            content=judge_response.model_dump_json(),
+                            model=model,
+                            tokens_used=tokens_used
+                        )
+                except Exception as e:
                     return AIResponse(
                         provider="Gemini",
-                        content=workout_result.model_dump_json(),
+                        content="",
                         model=model,
-                        tokens_used=tokens_used if tokens_used else None
+                        error=f"Failed to parse response: {str(e)}",
+                        tokens_used=tokens_used
                     )
-                elif action == "judge_response":
-                    judge_response = JudgeResponse.model_validate(parsed_data)
-                    print("Data validation successful! (from message content)")
-                    return AIResponse(
-                        provider="Gemini",
-                        content=judge_response.model_dump_json(),
-                        model=model,
-                        tokens_used=tokens_used if tokens_used else None
-                    )
-                
             
-            error_content = str(response.candidates[0].content.parts)
             return AIResponse(
                 provider="Gemini",
                 content="",
                 model=model,
-                error=f"LLM did not call the required function. Response: {error_content}",
+                error="No valid content found in response",
                 tokens_used=tokens_used
             )
-        
+                
         except Exception as e:
             return AIResponse(
                 provider="Gemini",
                 content="",
                 model=model,
-                error=str(e)
+                error=f"Error sending prompt: {str(e)}"
             )
     

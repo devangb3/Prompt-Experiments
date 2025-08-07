@@ -1,22 +1,26 @@
 """
-OpenAI service implementation
+OpenAI service for AI interactions
 """
 
+import json
 from typing import List, Optional
 from openai import OpenAI
 from models.BrainWorkoutResult import BrainWorkoutResult
 from .base_service import BaseAIService
 from .types import PromptMessage, AIResponse
 from models.JudgeResponse import JudgeResponse
-import json
+from logging_config import get_logger
+
+logger = get_logger("services.openai")
+
 
 class OpenAIService(BaseAIService):
-    """OpenAI API service"""
+    """OpenAI service implementation"""
     
     def _setup_client(self):
         """Setup OpenAI client"""
-        if self.api_key:
-            self.client = OpenAI(api_key=self.api_key)
+        self.client = OpenAI(api_key=self.api_key)
+        logger.debug("OpenAI client initialized")
     
     async def get_messages(self, tool : str, messages : List[PromptMessage]) -> List[PromptMessage]:
         """Get messages for the given tool"""
@@ -62,7 +66,7 @@ class OpenAIService(BaseAIService):
             return []
     
     async def get_tool(self, tool : str) -> dict:
-        """Get tool for the given tool"""
+        """Get tool definition for OpenAI API"""
         if tool == "generate_workout_result":
             save_workout_tool = {
                     "type": "function",
@@ -87,11 +91,11 @@ class OpenAIService(BaseAIService):
     async def validate_response(self, tool_call , action : str, model : str, tokens_used : Optional[int] = None) -> AIResponse:
         """Validate the response of the LLM"""
         if action == "generate_workout_result":
-            print("LLM responded with the correct tool. Validating data...")
+            logger.debug("LLM responded with the correct tool. Validating data...")
             tool_args = json.loads(tool_call.arguments)
             try:
                 workout_result = BrainWorkoutResult.model_validate(tool_args)
-                print("Data validation successful!")
+                logger.debug("Data validation successful!")
                 return AIResponse(
                     provider="OpenAI",
                     content=workout_result.model_dump_json(),
@@ -99,6 +103,7 @@ class OpenAIService(BaseAIService):
                     tokens_used=tokens_used if tokens_used else None
                 )
             except Exception as e:
+                logger.error(f"Validation error for BrainWorkoutResult: {e}")
                 return AIResponse(
                     provider="OpenAI",
                     content="",
@@ -106,11 +111,11 @@ class OpenAIService(BaseAIService):
                     error=str(e)
                 )
         elif action == "judge_response":
-            print("LLM responded with the correct tool. Validating data...")
+            logger.debug("LLM responded with the correct tool. Validating data...")
             tool_args = json.loads(tool_call.arguments)
             try:
                 judge_response = JudgeResponse.model_validate(tool_args)
-                print("Data validation successful!")
+                logger.debug("Data validation successful!")
                 return AIResponse(
                     provider="OpenAI",
                     content=judge_response.model_dump_json(),
@@ -118,6 +123,7 @@ class OpenAIService(BaseAIService):
                     tokens_used=tokens_used if tokens_used else None
                 )
             except Exception as e:
+                logger.error(f"Validation error for JudgeResponse: {e}")
                 return AIResponse(
                     provider="OpenAI",
                     content="",
@@ -184,7 +190,7 @@ class OpenAIService(BaseAIService):
                         
                         if action == "generate_workout_result":
                             workout_result = BrainWorkoutResult.model_validate(parsed_data)
-                            print("Data validation successful! (from message content)")
+                            logger.debug("Data validation successful! (from message content)")
                             return AIResponse(
                                 provider="OpenAI",
                                 content=workout_result.model_dump_json(),
@@ -200,20 +206,27 @@ class OpenAIService(BaseAIService):
                                 model=model,
                                 tokens_used=tokens_used if tokens_used else None
                             )
-
-                error_content = str(output_item)
-                return AIResponse(
-                    provider="OpenAI",
-                    content="",
-                    model=model,
-                    error=f"LLM did not call the required tool. Response: {error_content}",
-                    tokens_used=tokens_used
-                )
-        
+                    
+                    return AIResponse(
+                        provider="OpenAI",
+                        content="",
+                        model=model,
+                        error="No valid content found in response",
+                        tokens_used=tokens_used
+                    )
+                else:
+                    return AIResponse(
+                        provider="OpenAI",
+                        content="",
+                        model=model,
+                        error="No content found in response",
+                        tokens_used=tokens_used
+                    )
+                    
         except Exception as e:
             return AIResponse(
                 provider="OpenAI",
                 content="",
                 model=model,
-                error=str(e)
+                error=f"Error sending prompt: {str(e)}"
             ) 

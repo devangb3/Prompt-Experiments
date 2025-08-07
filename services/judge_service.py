@@ -1,13 +1,15 @@
 """
 Judge service for getting feedback on LLM responses
 """
-import json
-from typing import List
-
 import time
+from logging_config import get_logger
+
 from .types import PromptMessage, AIResponse, Provider
 from services import AIServiceFactory   
 from database.service_factory import get_database_service
+
+logger = get_logger("services.judge")
+
 JUDGE_USER_PROMPT = """
 Original User Prompt:
 ---
@@ -26,12 +28,16 @@ class JudgeService:
         self.factory = AIServiceFactory()
         self.enable_database = enable_database
         self.db_service = get_database_service() if enable_database else None
+        logger.info(f"JudgeService initialized with database enabled: {enable_database}")
         
     async def send_to_provider(self, provider: Provider, messages: list[PromptMessage], model: str = None, action: str = None):
         """Send prompt to a specific provider"""
+        logger.debug(f"JudgeService sending to provider: {provider.value}")
         start_time = time.time()
         response = await self.factory.send_to_provider(provider, messages, model, action)
         response_time = time.time() - start_time
+        
+        logger.info(f"Judge response received from {provider.value} in {response_time:.2f}s")
         
         if self.enable_database and self.db_service:
             try:
@@ -40,13 +46,15 @@ class JudgeService:
                     responses=[response],
                     response_times={provider.value: response_time}
                 )
+                logger.debug("Judge conversation saved to database")
             except Exception as e:
-                print(f"Failed to save conversation to database: {e}")
+                logger.error(f"Failed to save judge conversation to database: {e}")
         
         return response
         
     async def judge_response(self, provider: str, original_response: str, ui_request: str) -> AIResponse:
         """Judge an LLM response using another LLM"""
+        logger.info(f"Judging response from provider: {provider}")
         
         user_prompt = JUDGE_USER_PROMPT.format(
             user_prompt=ui_request,
@@ -63,12 +71,16 @@ class JudgeService:
         ]
 
         if provider.value == 'openai':
+            logger.debug("Using Anthropic to judge OpenAI response")
             return await self.send_to_provider(Provider.ANTHROPIC, messages, action="judge_response")
         elif provider.value == 'anthropic':
+            logger.debug("Using Gemini to judge Anthropic response")
             return await self.send_to_provider(Provider.GEMINI, messages, action="judge_response")
         elif provider.value == 'gemini':
+            logger.debug("Using OpenAI to judge Gemini response")
             return await self.send_to_provider(Provider.OPENAI, messages, action="judge_response")
         else:
+            logger.error(f"Unknown provider '{provider}' for judging")
             return AIResponse(
                 provider="JudgeService",
                 content="",
