@@ -51,11 +51,27 @@ class XanoDatabaseService:
     def _xano_to_mongo_conversation(self, xano_data: Dict) -> Conversation:
         """Convert Xano conversation data to MongoDB-compatible Conversation object"""
         def parse_timestamp(timestamp) -> datetime:
+            if isinstance(timestamp, datetime):
+                return timestamp
             if isinstance(timestamp, str):
-                return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            return datetime.fromtimestamp(timestamp)
+                try:
+                    return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except Exception:
+                    pass
+                try:
+                    numeric = float(timestamp)
+                    if numeric > 1e12:
+                        numeric = numeric / 1000.0
+                    return datetime.fromtimestamp(numeric)
+                except Exception:
+                    return datetime.utcnow()
+            if isinstance(timestamp, (int, float)):
+                numeric = float(timestamp)
+                if numeric > 1e12:
+                    numeric = numeric / 1000.0
+                return datetime.fromtimestamp(numeric)
+            return datetime.utcnow()
         
-        # Convert Xano response format to MongoDB format
         mongo_responses = []
         for xano_response in xano_data.get('responses', []):
             mongo_response = {
@@ -65,7 +81,7 @@ class XanoDatabaseService:
                 'tokens_used': xano_response.get('tokens_used'),
                 'error': xano_response.get('error'),
                 'response_time_ms': xano_response.get('response_time_ms'),
-                'created_at': parse_timestamp(xano_response.get('created_at', datetime.now()))
+                'created_at': parse_timestamp(xano_response.get('created_at', datetime.utcnow()))
             }
             mongo_responses.append(mongo_response)
         
@@ -75,7 +91,7 @@ class XanoDatabaseService:
             mongo_message = {
                 'role': xano_message.get('role'),
                 'content': xano_message.get('content'),
-                'created_at': parse_timestamp(xano_message.get('created_at', datetime.now()))
+                'created_at': parse_timestamp(xano_message.get('created_at', datetime.utcnow()))
             }
             mongo_messages.append(mongo_message)
         
@@ -85,8 +101,8 @@ class XanoDatabaseService:
             messages=mongo_messages,
             responses=mongo_responses,
             metadata=xano_data.get('metadata', {}),
-            created_at=parse_timestamp(xano_data.get('created_at', datetime.now())),
-            updated_at=parse_timestamp(xano_data.get('updated_at', datetime.now()))
+            created_at=parse_timestamp(xano_data.get('created_at', datetime.utcnow())),
+            updated_at=parse_timestamp(xano_data.get('updated_at', datetime.utcnow()))
         )
     
     async def save_conversation(
@@ -115,8 +131,9 @@ class XanoDatabaseService:
         conversation_data = {
             "conversation_id": conversation_id,
             "system_prompt": system_prompt,
-            "messages": self._convert_prompt_messages(messages),
-            "responses": self._convert_ai_responses(responses, response_times),
+            # Convert Pydantic models to plain dicts for JSON serialization
+            "messages": [m.model_dump() for m in self._convert_prompt_messages(messages)],
+            "responses": [r.model_dump() for r in self._convert_ai_responses(responses, response_times)],
             "metadata": metadata or {}
         }
         
