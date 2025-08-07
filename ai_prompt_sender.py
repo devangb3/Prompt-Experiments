@@ -14,7 +14,7 @@ from prompt_creator import PromptCreator
 from services import AIServiceFactory, Provider, PromptMessage, print_response, print_responses
 from database.service_factory import get_database_service
 from database.connection import close_database
-
+from services.judge_service import JudgeService
 load_dotenv()
 
 
@@ -27,10 +27,10 @@ class AIPromptSender:
         self.enable_database = enable_database
         self.db_service = get_database_service() if enable_database else None
     
-    async def send_to_provider(self, provider: Provider, messages: list[PromptMessage], model: str = None):
+    async def send_to_provider(self, provider: Provider, messages: list[PromptMessage], model: str = None, action: str = None):
         """Send prompt to a specific provider"""
         start_time = time.time()
-        response = await self.factory.send_to_provider(provider, messages, model)
+        response = await self.factory.send_to_provider(provider, messages, model, action)
         response_time = time.time() - start_time
         
         if self.enable_database and self.db_service:
@@ -150,26 +150,25 @@ async def main():
 
     messages = [
         PromptMessage(role="system", content="""
-You are an expert assistant. Your ONLY task is to generate a valid BrainWorkoutResult JSON object.
-STRICT INSTRUCTIONS:
-- You MUST return a single, fully filled JSON object that strictly matches the provided schema.
-- Do NOT include any extra text, comments, or explanations.
-- Every field must be present and filled according to its description and required tone.
-- If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null.
-- Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure.
-- Double-check your output for completeness and validity before submitting.
-"""),
+        You are an expert assistant. Your ONLY task is to generate a valid BrainWorkoutResult JSON object.
+        STRICT INSTRUCTIONS:
+        - You MUST return a single, fully filled JSON object that strictly matches the provided schema.
+        - Do NOT include any extra text, comments, or explanations.
+        - Every field must be present and filled according to its description and required tone.
+        - If you are unsure about a value, make a reasonable guess, but do not leave any field empty or null.
+        - Your response will be parsed as JSON. Any deviation from the schema or extra output will be considered a failure.
+        - Double-check your output for completeness and validity before submitting.
+        """),
         PromptMessage(role="user", content="STRICT INSTRUCTIONS: Output ONLY a valid BrainWorkoutResult JSON object. Do NOT include any extra text or formatting. All fields must be present and filled. Your response will be parsed as JSON.\n" + json.dumps(dummy_ui_request))
     ]
     print("\nSending prompt to all providers...")
-    responses = await sender.send_to_provider(Provider.OPENAI, messages)
+    responses = await sender.send_to_provider(Provider.GEMINI, messages, action="generate_workout_result")
     print_response(responses)
     
-    
-    print("\nRecent Conversations:")
-    conversations = await sender.get_conversation_history(limit=3)
-    for conv in conversations:
-        print(f"  {conv.conversation_id}: {len(conv.messages)} messages, {len(conv.responses)} responses")
+    print("\n Judging responses...")
+    judge = JudgeService()
+    judged_responses = await judge.judge_response(Provider.GEMINI, responses, dummy_ui_request)
+    print_response(judged_responses)
     
     await sender.close()
 

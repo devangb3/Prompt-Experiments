@@ -54,7 +54,7 @@ class AIServiceFactory:
         """Get list of available services"""
         return list(self.services.keys())
     
-    async def send_to_provider(self, provider: Provider, messages: List[PromptMessage], model: Optional[str] = None) -> AIResponse:
+    async def send_to_provider(self, provider: Provider, messages: List[PromptMessage], model: Optional[str] = None, action: Optional[str] = None) -> AIResponse:
         """Send prompt to a specific provider"""
         service = self.get_service(provider)
         if not service:
@@ -71,7 +71,7 @@ class AIServiceFactory:
             Provider.GEMINI: "gemini-2.5-pro"
         }
         
-        return await service.send_prompt(messages, model or default_models[provider])
+        return await service.send_prompt(messages, model or default_models[provider], action)
     
     async def send_to_all(self, messages: List[PromptMessage], models: Optional[Dict[Provider, str]] = None) -> List[AIResponse]:
         """Send prompt to all available providers"""
