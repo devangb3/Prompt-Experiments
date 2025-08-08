@@ -40,7 +40,7 @@ class PromptMessageModel(BaseModel):
 class AIResponseModel(BaseModel):
     """Database model for AI responses"""
     provider: str = Field(..., description="AI provider name")
-    content: str = Field(..., description="Response content")
+    response: str = Field(..., description="Response content from the LLM")
     model: str = Field(..., description="Model used for the response")
     tokens_used: Optional[int] = Field(None, description="Number of tokens used")
     error: Optional[str] = Field(None, description="Error message if any")
@@ -52,7 +52,7 @@ class AIResponseModel(BaseModel):
         json_schema_extra={
             "example": {
                 "provider": "openai",
-                "content": "Paris is the capital of France.",
+                "response": "Paris is the capital of France.",
                 "model": "gpt-4",
                 "tokens_used": 15,
                 "response_time_ms": 1250.5
@@ -68,6 +68,7 @@ class Conversation(BaseModel):
     system_prompt: Optional[str] = Field(None, description="System prompt if any")
     messages: List[PromptMessageModel] = Field(..., description="List of prompt messages")
     responses: List[AIResponseModel] = Field(..., description="List of AI responses")
+    ratings: Optional[Dict[str, Any]] = Field(None, description="Rating data as JSON object")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
@@ -86,11 +87,23 @@ class Conversation(BaseModel):
                 "responses": [
                     {
                         "provider": "openai",
-                        "content": "Paris is the capital of France.",
+                        "response": "Paris is the capital of France.",
                         "model": "gpt-4",
                         "tokens_used": 15
                     }
                 ],
+                "ratings": {
+                    "provider_ratings": {
+                        "openai": {
+                            "score": 4.5,
+                            "categories": {
+                                "clarity": {"score": 4.5, "reason": "Clear and concise"},
+                                "specificity": {"score": 4.0, "reason": "Specific answer"}
+                            },
+                            "overall_reason": "clarity: Clear and concise | specificity: Specific answer"
+                        }
+                    }
+                },
                 "metadata": {"session_id": "session_123"}
             }
         }

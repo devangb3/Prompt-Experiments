@@ -36,7 +36,7 @@ class DatabaseService:
             response_time = response_times.get(response.provider) if response_times else None
             db_response = AIResponseModel(
                 provider=response.provider,
-                content=response.content,
+                response=response.content,
                 model=response.model,
                 tokens_used=response.tokens_used,
                 error=response.error,
@@ -51,7 +51,8 @@ class DatabaseService:
         responses: List[AIResponse],
         conversation_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        response_times: Optional[Dict[str, float]] = None
+        response_times: Optional[Dict[str, float]] = None,
+        ratings: Optional[Dict[str, Any]] = None
     ) -> Conversation:
         """Save a complete conversation to the database"""
         await self.initialize()
@@ -73,6 +74,7 @@ class DatabaseService:
             system_prompt=system_prompt,
             messages=self._convert_prompt_messages(messages),
             responses=self._convert_ai_responses(responses, response_times),
+            ratings=ratings,
             metadata=metadata or {}
         )
         
@@ -92,11 +94,9 @@ class DatabaseService:
         return conversation
     
     async def get_all_conversations(self, limit: int = 100, skip: int = 0) -> List[Conversation]:
-        """Get all conversations with pagination"""
+        """Find all conversations with pagination"""
         await self.initialize()
-        conversations = await self.repository.find_all(limit=limit, skip=skip)
-        logger.debug(f"Retrieved {len(conversations)} conversations")
-        return conversations
+        return await self.repository.find_all(limit=limit, skip=skip)
     
     async def get_conversations_by_provider(self, provider: str, limit: int = 100) -> List[Conversation]:
         """Get conversations by AI provider"""
@@ -129,7 +129,7 @@ class DatabaseService:
         search_query = {
             "$or": [
                 {"messages.content": {"$regex": query, "$options": "i"}},
-                {"responses.content": {"$regex": query, "$options": "i"}},
+                {"responses.response": {"$regex": query, "$options": "i"}},
                 {"system_prompt": {"$regex": query, "$options": "i"}}
             ]
         }

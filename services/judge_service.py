@@ -38,18 +38,7 @@ class JudgeService:
         response_time = time.time() - start_time
         
         logger.info(f"Judge response received from {provider.value} in {response_time:.2f}s")
-        
-        if self.enable_database and self.db_service:
-            try:
-                await self.db_service.save_conversation(
-                    messages=messages,
-                    responses=[response],
-                    response_times={provider.value: response_time}
-                )
-                logger.debug("Judge conversation saved to database")
-            except Exception as e:
-                logger.error(f"Failed to save judge conversation to database: {e}")
-        
+               
         return response
         
     async def judge_response(self, provider: str, original_response: str, ui_request: str) -> AIResponse:

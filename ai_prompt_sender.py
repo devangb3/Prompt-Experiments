@@ -16,6 +16,7 @@ from database.service_factory import get_database_service
 from database.connection import close_database
 from services.judge_service import JudgeService
 from logging_config import get_logger
+from services.types import AIResponse
 
 load_dotenv()
 
@@ -46,19 +47,66 @@ class AIPromptSender:
         
         logger.info(f"Response received from {provider.value} in {response_time:.2f}s")
         
-        if self.enable_database and self.db_service:
-            try:
-                await self.db_service.save_conversation(
-                    messages=messages,
-                    responses=[response],
-                    response_times={provider.value: response_time}
-                )
-                logger.debug(f"Conversation saved to database for provider: {provider.value}")
-            except Exception as e:
-                logger.error(f"Failed to save conversation to database: {e}")
-        
         return response
     
+    async def save_to_database(self, provider: Provider, messages: list[PromptMessage], responses: list[AIResponse] | AIResponse, rating: AIResponse | None, response_time: float):
+        """Save a conversation with ratings as a separate field."""
+        if not (self.enable_database and self.db_service):
+            return
+        try:
+            response_list: list[AIResponse] = responses if isinstance(responses, list) else [responses]
+            
+            rating_data = None
+            if rating:
+                try:
+                    # Parse judge response JSON
+                    parsed = json.loads(rating.content) if isinstance(rating.content, str) else rating.content
+                    if isinstance(parsed, dict):
+                        categories = ["clarity", "specificity", "relevance", "actionability", "approachability"]
+                        rating_data = {
+                            "provider_ratings": {
+                                provider.value: {
+                                    "score": 0.0,  # Will be calculated as average
+                                    "categories": {},
+                                    "overall_reason": ""
+                                }
+                            }
+                        }
+                        
+                        total_score = 0
+                        reasons = []
+                        for key in categories:
+                            tile = parsed.get(key)
+                            if isinstance(tile, dict):
+                                score = float(tile.get("score", 0))
+                                reason = tile.get("reason", "").strip()
+                                rating_data["provider_ratings"][provider.value]["categories"][key] = {
+                                    "score": score,
+                                    "reason": reason
+                                }
+                                total_score += score
+                                if reason:
+                                    reasons.append(f"{key}: {reason}")
+                        
+                        if categories:
+                            rating_data["provider_ratings"][provider.value]["score"] = total_score / len(categories)
+                        
+                        if reasons:
+                            rating_data["provider_ratings"][provider.value]["overall_reason"] = " | ".join(reasons)[:2000]
+                except Exception as e:
+                    logger.error(f"Failed to parse rating data: {e}")
+                    rating_data = None
+            
+            await self.db_service.save_conversation(
+                messages=messages,
+                responses=response_list,
+                response_times={provider.value: response_time},
+                ratings=rating_data
+            )
+            logger.debug(f"Conversation saved to database for provider: {provider.value}")
+        except Exception as e:
+            logger.error(f"Failed to save conversation to database: {e}")
+
     async def send_to_all(self, messages: list[PromptMessage], models: dict = None):
         """Send prompt to all available providers"""
         logger.info("Sending prompt to all available providers")
@@ -70,21 +118,7 @@ class AIPromptSender:
         total_time = time.time() - start_time
         
         logger.info(f"Received responses from {len(responses)} providers in {total_time:.2f}s")
-        
-        if self.enable_database and self.db_service and len(responses) > 1:
-            try:
-                avg_time_per_provider = total_time / len(responses)
-                response_times = {resp.provider: avg_time_per_provider for resp in responses}
-                
-                await self.db_service.save_conversation(
-                    messages=messages,
-                    responses=responses,
-                    response_times=response_times
-                )
-                logger.debug("Multi-provider conversation saved to database")
-            except Exception as e:
-                logger.error(f"Failed to save conversation to database: {e}")
-        
+                 
         return responses
     
     def get_available_services(self):
@@ -201,13 +235,17 @@ async def main():
         PromptMessage(role="user", content="STRICT INSTRUCTIONS: Output ONLY a valid BrainWorkoutResult JSON object. Do NOT include any extra text or formatting. All fields must be present and filled. Your response will be parsed as JSON.\n" + json.dumps(dummy_ui_request))
     ]
     
-    responses = await sender.send_to_provider(Provider.ANTHROPIC, messages, action="generate_workout_result")
-    print_response(responses)
+    start_time = time.time()
+    response = await sender.factory.send_to_provider(Provider.GEMINI, messages, None, "generate_workout_result")
+    response_time = time.time() - start_time
+    print_response(response)
     
     logger.info("Judging responses...")
     judge = JudgeService()
-    judged_responses = await judge.judge_response(Provider.ANTHROPIC, responses, dummy_ui_request)
-    print_response(judged_responses)
+    judged_response = await judge.judge_response(Provider.GEMINI, response.content, dummy_ui_request)
+    print_response(judged_response)
+
+    await sender.save_to_database(Provider.GEMINI, messages, response, judged_response, response_time)
     
     await sender.close()
     logger.info("AI Prompt Sender completed successfully")

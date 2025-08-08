@@ -39,7 +39,7 @@ class XanoDatabaseService:
             response_time = response_times.get(response.provider) if response_times else None
             xano_response = XanoAIResponseModel(
                 provider=response.provider,
-                content=response.content,
+                response=response.content,
                 model=response.model,
                 tokens_used=response.tokens_used,
                 error=response.error,
@@ -76,7 +76,7 @@ class XanoDatabaseService:
         for xano_response in xano_data.get('responses', []):
             mongo_response = {
                 'provider': xano_response.get('provider'),
-                'content': xano_response.get('content'),
+                'response': xano_response.get('response'),
                 'model': xano_response.get('model'),
                 'tokens_used': xano_response.get('tokens_used'),
                 'error': xano_response.get('error'),
@@ -100,6 +100,7 @@ class XanoDatabaseService:
             system_prompt=xano_data.get('system_prompt'),
             messages=mongo_messages,
             responses=mongo_responses,
+            ratings=xano_data.get('ratings'),
             metadata=xano_data.get('metadata', {}),
             created_at=parse_timestamp(xano_data.get('created_at', datetime.utcnow())),
             updated_at=parse_timestamp(xano_data.get('updated_at', datetime.utcnow()))
@@ -111,7 +112,8 @@ class XanoDatabaseService:
         responses: List[AIResponse],
         conversation_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        response_times: Optional[Dict[str, float]] = None
+        response_times: Optional[Dict[str, float]] = None,
+        ratings: Optional[Dict[str, Any]] = None
     ) -> Conversation:
         """Save a complete conversation to Xano"""
         await self.initialize()
@@ -134,6 +136,7 @@ class XanoDatabaseService:
             # Convert Pydantic models to plain dicts for JSON serialization
             "messages": [m.model_dump() for m in self._convert_prompt_messages(messages)],
             "responses": [r.model_dump() for r in self._convert_ai_responses(responses, response_times)],
+            "ratings": ratings,
             "metadata": metadata or {}
         }
         
@@ -256,7 +259,7 @@ class XanoDatabaseService:
                 
                 # Search in responses
                 for response in conv.responses:
-                    if query.lower() in response.content.lower():
+                    if query.lower() in getattr(response, 'response', '').lower():
                         if conv not in matching_conversations:
                             matching_conversations.append(conv)
                         break
